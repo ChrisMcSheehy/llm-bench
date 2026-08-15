@@ -1,7 +1,7 @@
 """What forks a fingerprint, and what deliberately does not."""
 from __future__ import annotations
 
-from llmbench.models import ModelFingerprint
+from llmbench.models import ModelFingerprint, parse_quant
 
 
 def _fp(**overrides) -> ModelFingerprint:
@@ -94,3 +94,47 @@ def test_the_memory_estimate_does_not_change_the_identity():
 def test_an_unknown_estimate_is_none_and_not_zero():
     """Zero would read as 'this configuration costs no memory'."""
     assert _fp().kv_cache_bytes is None
+
+
+# ---- the quantisation scheme, not just its nominal size ----------------------
+#
+# Found on 2026-08-15 while reading Unsloth's documentation. Their Dynamic quants choose
+# the type per layer, so `UD-Q4_K_M` and a stock `Q4_K_M` are the same nominal size and
+# very nearly the same file size while being different programs - their own measurements
+# put Dynamic "Q4" near uniform Q5 for perplexity. `parse_quant` matched the plain token
+# inside the longer name and returned `Q4_K_M` for both, which is the one field this
+# bench exists to compare.
+
+def test_a_dynamic_quant_keeps_its_prefix():
+    assert parse_quant("Qwen3.6-35B-A3B-UD-Q4_K_M.gguf") == "UD-Q4_K_M"
+    assert parse_quant("Qwen3-30B-UD-Q4_K_XL.gguf") == "UD-Q4_K_XL"
+    assert parse_quant("model-UD-IQ2_M.gguf") == "UD-IQ2_M"
+
+
+def test_a_stock_quant_gains_no_prefix():
+    """The success condition. A change that labelled everything UD- would also stop the
+    collision, and would be wrong about every other model on disk."""
+    assert parse_quant("Qwen3.6-35B-A3B-Q4_K_M.gguf") == "Q4_K_M"
+    assert parse_quant("Qwen3-30B-IQ4_XS.gguf") == "IQ4_XS"
+    assert parse_quant("gpt-oss-20b-MXFP4.gguf") == "MXFP4"
+
+
+def test_a_word_that_merely_ends_in_ud_is_not_a_dynamic_quant():
+    """`cloud-q4_k_m` is a stock quant in a folder with an unfortunate name."""
+    assert parse_quant("cloud-q4_k_m.gguf") == "Q4_K_M"
+    assert parse_quant("my-STUD-Q4_K_M.gguf") == "Q4_K_M"
+
+
+def test_a_dynamic_quant_and_a_stock_quant_are_two_configurations():
+    """The point of the parsing above: they must not pool into one leaderboard row.
+
+    They differ in what the file *is*, so averaging their scores together would hide the
+    comparison the bench was pointed at.
+    """
+    assert (_fp(quant="UD-Q4_K_M").fingerprint_hash
+            != _fp(quant="Q4_K_M").fingerprint_hash)
+
+
+def test_the_label_says_which_quantisation_scheme_it_was():
+    """Two rows both reading 'Q4_K_M' is the reader-facing half of the same defect."""
+    assert "UD-Q4_K_M" in _fp(quant="UD-Q4_K_M").label

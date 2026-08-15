@@ -284,8 +284,16 @@ class RunResult(BaseModel):
 
 # ---- shared parsing helpers (used by target adapters) --------------------
 
+# The `UD-` prefix is kept because it names a different quantisation scheme, not a
+# variant spelling. An Unsloth Dynamic quant chooses the type per layer, so UD-Q4_K_M and
+# a stock Q4_K_M are the same nominal size and the same file size while being different
+# programs - their own measurements put Dynamic "Q4" near uniform Q5 for perplexity.
+# Dropping the prefix filed both under `Q4_K_M`, which is the one field this bench exists
+# to compare, so a table comparing quants showed two identical labels for the two things
+# being compared. `\b` keeps it from firing inside an ordinary word ending "ud".
 _QUANT_RE = re.compile(
-    r"(IQ\d+_[A-Z]+(?:_[A-Z]+)?|Q\d+_K_[A-Z]+|Q\d+_K|Q\d+_\d+|Q\d+|MXFP4|BF16|F16|F32)",
+    r"((?:\bUD-)?"
+    r"(?:IQ\d+_[A-Z]+(?:_[A-Z]+)?|Q\d+_K_[A-Z]+|Q\d+_K|Q\d+_\d+|Q\d+|MXFP4|BF16|F16|F32))",
     re.IGNORECASE,
 )
 _PARAMS_RE = re.compile(r"(\d+(?:\.\d+)?[BbMm](?:-A\d+(?:\.\d+)?[BbMm])?)")
