@@ -478,6 +478,37 @@ third angle: here the check could not tell success from *never having been asked
 
 ---
 
+## [2026-08-15] a-substring-match-discards-the-qualifier-that-made-it-different
+
+- **Trigger:** reading Unsloth's documentation while answering an unrelated question.
+  `parse_quant` searched a model filename for a known quantisation token, so
+  `Qwen3.6-35B-A3B-UD-Q4_K_M.gguf` and `Qwen3.6-35B-A3B-Q4_K_M.gguf` both returned
+  `Q4_K_M`. The `UD-` prefix is not a spelling variant: an Unsloth Dynamic quant picks
+  the type per layer, and their own measurements put Dynamic "Q4" near uniform Q5 for
+  perplexity. The two files are the same nominal size and different programs, and `quant`
+  is the field this entire bench exists to compare. This project's own launch-profile
+  example in `DESIGN-benchmark-coverage.md` names a `UD-` model, so the collision was
+  already sitting in the documented workflow.
+- **Lesson:** a parser that *searches* a longer name for a known token silently discards
+  whatever qualified it. The match succeeds, the value looks exactly right, and nothing
+  anywhere fails — the defect is only ever visible by comparing the input to the output,
+  which is precisely what a passing test suite gives nobody a reason to do. Extraction by
+  substring is a claim that everything around the substring is noise, and that claim
+  should be written down and tested rather than assumed by a regex.
+- **Enforcement:** the prefix is part of the pattern in `models.py`, and
+  `tests/test_identity.py` pins all four directions: a Dynamic quant keeps its prefix, a
+  stock quant does not gain one, a word merely ending in "ud" is not a Dynamic quant, and
+  the two hash to different fingerprints. The negative cases matter as much as the
+  positive one — a rule that labelled everything `UD-` would also have removed the
+  collision and been wrong about every other model on disk.
+- **Scope:** global. Applies to every parser in the project that reaches into a name for a
+  known token: `parse_params` and `model_name_from_path` are the same shape.
+
+Related: [[a-launch-argument-is-a-request-not-a-fact]] — both are about a value that reads
+as a fact about the deployment while actually being a fact about a string.
+
+---
+
 ## moving-shared-files-needs-a-grep-not-a-memory
 
 **2026-07-26 — cost: one red test run, two mid-execution plan amendments.**

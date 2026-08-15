@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **43 test files, 286 checks, all passing** — verified 2026-08-15, 71
+Current state: **44 test files, 309 checks, all passing** — verified 2026-08-15, 75
 seconds.
 
 ---
@@ -53,7 +53,7 @@ computed from all the settings that affect the outcome. Change a setting that mo
 numbers, and you get a different fingerprint, so the new results are filed separately
 instead of being blended into the old ones.
 
-### `test_identity.py` (10 checks) — what counts as a different setup
+### `test_identity.py` (15 checks) — what counts as a different setup
 
 Proves the fingerprint changes when it should and *doesn't* when it shouldn't.
 
@@ -66,6 +66,15 @@ Proves the fingerprint changes when it should and *doesn't* when it shouldn't.
 - The memory estimate doesn't change the identity — it's something we *calculated*, not
   something that changes results.
 - "Nobody set this knob" and "this knob is set to zero" are different things.
+- A **compressed model file's compression scheme** counts, not just how small it is.
+  Some publishers vary the compression layer by layer, and such a file is named
+  `UD-Q4_K_M` where an ordinary one is `Q4_K_M`. They come out roughly the same size and
+  behave quite differently — by the publisher's own figures the clever one at "Q4" is
+  about as accurate as a plain "Q5". The bench used to read the name, spot the familiar
+  `Q4_K_M` inside it, and file both under that — so the two things you were comparing
+  appeared in the table under one identical label. These prove the prefix survives, that
+  an ordinary file doesn't wrongly acquire one, that a folder called `cloud-` doesn't
+  trip the rule, and that the two now count as two setups.
 
 ### `test_binary_identity.py` (6 checks) — which *executable* produced this
 
@@ -183,6 +192,33 @@ These tests use the real captured response and prove:
   is correct and a different situation entirely.
 - And a sweeping check: **every single grading module in the project** is walked through
   and confirmed to refuse to score a non-answer. Not just the one where the bug appeared.
+
+### `test_shared_result_path.py` (18 checks) — the same scaffolding, written once
+
+**The defect, found by audit rather than by failure.** Every test module used to copy the
+same six measurements off the model's response onto its own result row — tokens in and
+out, how long it took, how fast it ran, and the two speeds the server itself reports
+(*reading the question* and *writing the answer*, which are different operations with
+different bottlenecks).
+
+Copied eleven times, the copies drifted. Two modules recorded all six. One recorded five.
+**The other eight recorded four**, so the instruction-following and multiple-choice tests
+reported no server-side speed at all. Nobody decided that. It is simply what copying
+produces, and nothing failed, so nothing complained.
+
+The scaffolding now lives in one place that fills every field, and these checks prove it:
+
+- **Every module that asks a model anything records all six measurements** — walked
+  through one module at a time, with a companion check that a module added later must be
+  added to the list or this fails rather than quietly skipping the new one.
+- A question file with a broken line reports **the file name and the line number**
+  (blank lines don't shift the count), instead of the bare "expecting value" that four
+  separate hand-written loaders used to produce for a file people edit by hand.
+- Per-category figures — accuracy by subject, recall by context length — are now
+  *declared* by a module rather than looped over by hand, and these prove the declaration
+  produces the same figures the loops did: correct averages, each carrying its count, an
+  unanswered question left out rather than averaged in as a zero, and an item with no
+  category left out rather than filed under an invented one.
 
 ### `test_store_skipped.py` / `test_dashboard_skipped.py` (3 + 3) — a gap must explain itself
 
