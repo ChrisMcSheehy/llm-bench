@@ -17,7 +17,7 @@ import re
 from typing import Any
 
 from llmbench.evaluators._ladder import climb, context_ladder
-from llmbench.evaluators.base import EvalContext, Evaluator
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
 
@@ -36,6 +36,10 @@ _FILLER_TEMPLATES = [
     "Travellers passing through {c} spoke of {w1} lanterns and {w2} bridges.",
     "A survey of {c} listed {w1} orchards, {w2} mills, and several old wells.",
 ]
+
+#: The recall a rung must still reach to count as usable context. Two thirds, so a rung
+#: that fails a third of its probes is not reported as one the model can work at.
+_RECALL_FLOOR = 0.66
 
 _DEFAULTS = {
     "context_lengths": None,          # explicit list; overrides the ladder
@@ -59,6 +63,7 @@ class NeedleEvaluator(Evaluator):
     name = "needle"
     version = "1"
     default_config = _DEFAULTS
+    breakdowns = [Breakdown("recall", ("context_len",))]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)
@@ -131,49 +136,30 @@ class NeedleEvaluator(Evaluator):
         user = (f"{haystack}\n\nQuestion: What is the special access code for the "
                 f"city of {city}? Reply with only the code, nothing else.")
 
-        dims = {"context_len": length, "depth_pct": depth, "city": city, "rep": rep}
-        try:
-            res = await ctx.generate(
-                [{"role": "system", "content": system},
-                 {"role": "user", "content": user}],
-                max_tokens=cfg["answer_tokens"], temperature=0.0,
-            )
-        except Exception as e:  # network / OOM / context overflow
-            return Sample(evaluator=self.name, case_id=f"{length}:{depth}:{rep}",
-                          group=str(length), dims=dims, error=repr(e))
+        def grade(res) -> Verdict:
+            found = code.lower() in re.sub(r"\s+", " ", res.text).lower()
+            return Verdict(score=1.0 if found else 0.0, passed=found,
+                           meta={"code": code, "answer": res.text[:200],
+                                 "truncated": res.truncated})
 
         # A response that never reached an answer is not a failed retrieval, and scoring
-        # it zero would report a measurement nobody took (design D3).
-        if res.unusable_reason:
-            return Sample(evaluator=self.name, case_id=f"{length}:{depth}:{rep}",
-                          group=str(length), dims=dims, skipped=res.unusable_reason)
-
-        found = code.lower() in re.sub(r"\s+", " ", res.text).lower()
-        return Sample(
-            evaluator=self.name, case_id=f"{length}:{depth}:{rep}", group=str(length),
-            dims=dims, score=1.0 if found else 0.0, passed=found,
-            input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-            latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-            server_prompt_tps=res.server_prompt_tps, server_gen_tps=res.server_gen_tps,
-            meta={"code": code, "answer": res.text[:200], "truncated": res.truncated},
-        )
+        # it zero would report a measurement nobody took (design D3). run_case records it
+        # as skipped and never calls the grader.
+        return await self.run_case(
+            ctx, case_id=f"{length}:{depth}:{rep}", group=str(length),
+            dims={"context_len": length, "depth_pct": depth, "city": city, "rep": rep},
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": user}],
+            grade=grade, max_tokens=cfg["answer_tokens"], temperature=0.0)
 
     def aggregate(self, samples: list[Sample]) -> list[Metric]:
+        """Per-rung recall is declared above; only the effective context is bespoke."""
         metrics = super().aggregate(samples)
-        graded = [s for s in samples if s.error is None and s.score is not None]
-        if not graded:
-            return metrics
-        # Per-rung recall.
-        by_len: dict[int, list[float]] = {}
-        for s in graded:
-            by_len.setdefault(s.dims["context_len"], []).append(s.score)
-        for length, scores in sorted(by_len.items()):
-            metrics.append(Metric(evaluator=self.name, name="recall",
-                                  value=round(sum(scores) / len(scores), 4),
-                                  n=len(scores), dims={"context_len": length}))
-        # Effective context: largest rung still at/above threshold.
-        thr = 0.66
-        good = [ln for ln, sc in by_len.items() if sum(sc) / len(sc) >= thr]
+        # Read back from the recall figures rather than re-grouping the samples, so the
+        # rung this picks and the rung the table shows cannot come from different sums.
+        by_len = {m.dims["context_len"]: m.value for m in metrics
+                  if m.name == "recall" and "context_len" in m.dims}
+        good = [length for length, recall in by_len.items() if recall >= _RECALL_FLOOR]
         if good:
             # The rungs measured, not the samples: this figure chooses among rungs, and
             # a count of samples would suggest a precision it does not have.

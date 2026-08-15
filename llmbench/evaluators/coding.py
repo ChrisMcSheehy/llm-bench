@@ -31,7 +31,7 @@ from typing import Any
 
 import yaml
 
-from llmbench.evaluators.base import EvalContext, Evaluator
+from llmbench.evaluators.base import EvalContext, Evaluator, Verdict
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
 from llmbench.resources import data_path
@@ -155,35 +155,26 @@ class CodingEvaluator(Evaluator):
         prompt = (f"{prob['prompt']}\n\nWrite a complete Python solution. "
                   f"Define exactly the function `{prob['entrypoint']}`. "
                   f"Return only a single ```python code block.")
-        dims = {"problem": pid, "sample": idx}
-        try:
-            res = await ctx.generate(
-                [{"role": "user", "content": prompt}],
-                max_tokens=cfg["max_tokens"], temperature=cfg["temperature"],
-            )
-        except Exception as e:
-            return Sample(evaluator=self.name, case_id=f"{pid}:{idx}", group=pid,
-                          dims=dims, error=repr(e))
+        # The one grader in the project that has to await: it runs the model's code under
+        # pytest in a subprocess. `run_case` accepts either shape for that reason.
+        async def grade(res) -> Verdict:
+            code = _extract_code(res.text)
+            passed, detail = (None, "not executed")
+            if cfg["execute"]:
+                passed, detail = await self._run_tests(
+                    code, prob, cfg.get("per_test_timeout_s", prob.get("timeout_s", 30)))
+            return Verdict(
+                # With execute:false there is no verdict to give - score stays None
+                # rather than becoming a zero nobody measured.
+                score=1.0 if passed else 0.0 if passed is not None else None,
+                passed=passed,
+                meta={"detail": detail[:500], "code": code[:2000]})
 
-        if res.unusable_reason:
-            return Sample(evaluator=self.name, case_id=f"{pid}:{idx}", group=pid,
-                          dims=dims, skipped=res.unusable_reason)
-
-        code = _extract_code(res.text)
-        passed, detail = (None, "not executed")
-        if cfg["execute"]:
-            passed, detail = await self._run_tests(
-                code, prob, cfg.get("per_test_timeout_s", prob.get("timeout_s", 30)))
-
-        return Sample(
-            evaluator=self.name, case_id=f"{pid}:{idx}", group=pid, dims=dims,
-            score=1.0 if passed else 0.0 if passed is not None else None,
-            passed=passed,
-            input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-            latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-            server_prompt_tps=res.server_prompt_tps, server_gen_tps=res.server_gen_tps,
-            meta={"detail": detail[:500], "code": code[:2000]},
-        )
+        return await self.run_case(
+            ctx, case_id=f"{pid}:{idx}", group=pid,
+            dims={"problem": pid, "sample": idx},
+            messages=[{"role": "user", "content": prompt}], grade=grade,
+            max_tokens=cfg["max_tokens"], temperature=cfg["temperature"])
 
     async def _run_tests(self, code: str, prob: dict, timeout: int) -> tuple[bool, str]:
         tmp = Path(tempfile.mkdtemp(prefix="llmbench_"))

@@ -14,15 +14,13 @@ in real datasets (converted to this schema) for real numbers.
 """
 from __future__ import annotations
 
-import json
 import string
-from typing import Any
 
 from llmbench.evaluators._extract import extract_choice
-from llmbench.evaluators.base import EvalContext, Evaluator
-from llmbench.models import Metric, Sample
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.models import Sample
 from llmbench.registry import register
-from llmbench.resources import resolve_data_file
+from llmbench.resources import load_jsonl
 
 _DEFAULTS = {
     "data_file": None,          # None = the bundled sample set
@@ -38,22 +36,15 @@ class MCQAEvaluator(Evaluator):
     name = "mcqa"
     version = "1"
     default_config = _DEFAULTS
+    breakdowns = [Breakdown("accuracy", ("subject",))]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)
-        items = self._load(cfg)
+        items = load_jsonl(cfg["data_file"], "datasets", "mcqa.jsonl", limit=cfg["limit"])
         out = []
         for it in items:
             out.append(await self._one(ctx, cfg, it))
         return out
-
-    def _load(self, cfg) -> list[dict]:
-        p = resolve_data_file(cfg["data_file"], "datasets", "mcqa.jsonl")
-        items = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines()
-                 if l.strip()]
-        if cfg["limit"]:
-            items = items[: cfg["limit"]]
-        return items
 
     async def _one(self, ctx, cfg, it) -> Sample:
         opts = it["options"]
@@ -65,33 +56,16 @@ class MCQAEvaluator(Evaluator):
                  if not cfg["cot"] else
                  "Think briefly, then end with 'Answer: <letter>'.")
         prompt = f"{it['question']}\n\n{block}\n\n{instr}"
-        dims = {"subject": it.get("subject", "all")}
-        try:
-            res = await ctx.generate([{"role": "user", "content": prompt}],
-                                     max_tokens=cfg["max_tokens"] if not cfg["cot"] else 512,
-                                     temperature=cfg["temperature"])
-        except Exception as e:
-            return Sample(evaluator=self.name, case_id=str(it["id"]), group=dims["subject"],
-                          dims=dims, error=repr(e))
-        if res.unusable_reason:
-            return Sample(evaluator=self.name, case_id=str(it["id"]), group=dims["subject"],
-                          dims=dims, skipped=res.unusable_reason)
-        pred = extract_choice(res.text, len(opts))
-        ok = pred == gold
-        return Sample(evaluator=self.name, case_id=str(it["id"]), group=dims["subject"],
-                      dims=dims, score=1.0 if ok else 0.0, passed=ok,
-                      input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-                      latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-                      meta={"pred": pred, "gold": gold, "answer": res.text[:120]})
+        subject = it.get("subject", "all")
 
-    def aggregate(self, samples: list[Sample]) -> list[Metric]:
-        metrics = super().aggregate(samples)
-        graded = [s for s in samples if s.error is None and s.passed is not None]
-        by_sub: dict[str, list[bool]] = {}
-        for s in graded:
-            by_sub.setdefault(s.dims.get("subject", "all"), []).append(bool(s.passed))
-        for sub, v in sorted(by_sub.items()):
-            metrics.append(Metric(evaluator=self.name, name="accuracy",
-                                  value=round(sum(v) / len(v), 4), n=len(v),
-                                  dims={"subject": sub}))
-        return metrics
+        def grade(res) -> Verdict:
+            pred = extract_choice(res.text, len(opts))
+            ok = pred == gold
+            return Verdict(score=1.0 if ok else 0.0, passed=ok,
+                           meta={"pred": pred, "gold": gold, "answer": res.text[:120]})
+
+        return await self.run_case(
+            ctx, case_id=str(it["id"]), group=subject, dims={"subject": subject},
+            messages=[{"role": "user", "content": prompt}], grade=grade,
+            max_tokens=cfg["max_tokens"] if not cfg["cot"] else 512,
+            temperature=cfg["temperature"])

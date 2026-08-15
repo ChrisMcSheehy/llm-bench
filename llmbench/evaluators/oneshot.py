@@ -14,13 +14,12 @@ JSONL item schema:
 """
 from __future__ import annotations
 
-import json
 import re
 
-from llmbench.evaluators.base import EvalContext, Evaluator
-from llmbench.models import Metric, Sample
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.models import Sample
 from llmbench.registry import register
-from llmbench.resources import resolve_data_file
+from llmbench.resources import load_jsonl
 
 _HTML_BLOCK = re.compile(r"```(?:html)?\s*\n(.*?)```", re.DOTALL | re.I)
 _DOC = re.compile(r"(<!doctype html.*?</html>|<html.*?</html>)", re.DOTALL | re.I)
@@ -68,52 +67,32 @@ class OneShotEvaluator(Evaluator):
     name = "oneshot"
     version = "1"
     default_config = _DEFAULTS
+    # Three decimal places because the per-sample build score has three; this figure is
+    # their mean and gains no precision by being printed wider.
+    breakdowns = [Breakdown("build_score", ("kind",), round_to=3)]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)
-        p = resolve_data_file(cfg["data_file"], "datasets", "oneshot_prompts.jsonl")
-        items = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines()
-                 if l.strip()]
-        if cfg["limit"]:
-            items = items[: cfg["limit"]]
+        items = load_jsonl(cfg["data_file"], "datasets", "oneshot_prompts.jsonl",
+                           limit=cfg["limit"])
         return [await self._one(ctx, cfg, it) for it in items]
 
     async def _one(self, ctx, cfg, it) -> Sample:
         kind = it.get("kind", "app")
-        dims = {"kind": kind, "prompt_id": it["id"]}
-        try:
-            res = await ctx.generate([{"role": "user", "content": it["prompt"]}],
-                                     max_tokens=cfg["max_tokens"],
-                                     temperature=cfg["temperature"])
-        except Exception as e:
-            return Sample(evaluator=self.name, case_id=it["id"], group=kind,
-                          dims=dims, error=repr(e))
-        if res.unusable_reason:
-            return Sample(evaluator=self.name, case_id=it["id"], group=kind,
-                          dims=dims, skipped=res.unusable_reason)
-        html = extract_html(res.text)
-        score, checks = build_score(html, kind, it.get("features", []))
-        return Sample(
-            evaluator=self.name, case_id=it["id"], group=kind, dims=dims,
-            score=score,                     # heuristic build score (not quality)
-            input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-            latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-            server_gen_tps=res.server_gen_tps,
-            meta={"prompt_id": it["id"], "prompt": it["prompt"], "kind": kind,
-                  "artifact": html, "build_checks": checks, "build_score": score,
-                  "html_bytes": len(html)})
 
-    def aggregate(self, samples: list[Sample]) -> list[Metric]:
-        metrics = super().aggregate(samples)     # score_mean (=build), tok/s, errors
-        # Skips excluded: `s.score or 0.0` below would otherwise turn a response that
-        # never arrived into a build score of zero, which is the one reading this
-        # project never displays.
-        graded = [s for s in samples if s.error is None and s.skipped is None]
-        by_kind: dict[str, list[float]] = {}
-        for s in graded:
-            by_kind.setdefault(s.dims["kind"], []).append(s.score or 0.0)
-        for kind, v in sorted(by_kind.items()):
-            metrics.append(Metric(evaluator=self.name, name="build_score",
-                                  value=round(sum(v) / len(v), 3), n=len(v),
-                                  dims={"kind": kind}))
-        return metrics
+        def grade(res) -> Verdict:
+            html = extract_html(res.text)
+            score, checks = build_score(html, kind, it.get("features", []))
+            # score is the heuristic build score, not a quality judgement: the real
+            # signal is a human rating the rendered artifact in the gallery.
+            return Verdict(score=score,
+                           meta={"prompt_id": it["id"], "prompt": it["prompt"],
+                                 "kind": kind, "artifact": html,
+                                 "build_checks": checks, "build_score": score,
+                                 "html_bytes": len(html)})
+
+        return await self.run_case(
+            ctx, case_id=it["id"], group=kind,
+            dims={"kind": kind, "prompt_id": it["id"]},
+            messages=[{"role": "user", "content": it["prompt"]}], grade=grade,
+            max_tokens=cfg["max_tokens"], temperature=cfg["temperature"])

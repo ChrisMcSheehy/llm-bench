@@ -16,8 +16,8 @@ from __future__ import annotations
 from typing import Any
 
 from llmbench.evaluators._extract import first_json
-from llmbench.evaluators.base import EvalContext, Evaluator
-from llmbench.models import Metric, Sample
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.models import Sample
 from llmbench.registry import register
 
 _TYPES = {"string": str, "number": (int, float), "integer": int,
@@ -79,6 +79,7 @@ class StructuredEvaluator(Evaluator):
     name = "structured"
     version = "1"
     default_config = _DEFAULTS
+    breakdowns = [Breakdown("pass_rate", ("task",))]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)
@@ -91,45 +92,28 @@ class StructuredEvaluator(Evaluator):
                 out.append(await self._tool(ctx, cfg, tid, prompt, spec))
         return out
 
-    async def _gen(self, ctx, cfg, prompt):
-        return await ctx.generate([{"role": "user", "content": prompt}],
-                                  max_tokens=cfg["max_tokens"], temperature=cfg["temperature"])
+    async def _case(self, ctx, cfg, tid, prompt, task: str, grade) -> Sample:
+        return await self.run_case(
+            ctx, case_id=tid, group=task, dims={"task": task},
+            messages=[{"role": "user", "content": prompt}], grade=grade,
+            max_tokens=cfg["max_tokens"], temperature=cfg["temperature"])
 
     async def _json(self, ctx, cfg, tid, prompt, schema) -> Sample:
-        dims = {"task": "json_schema"}
-        try:
-            res = await self._gen(ctx, cfg, prompt)
-        except Exception as e:
-            return Sample(evaluator=self.name, case_id=tid, group="json_schema",
-                          dims=dims, error=repr(e))
-        if res.unusable_reason:
-            return Sample(evaluator=self.name, case_id=tid, group="json_schema",
-                          dims=dims, skipped=res.unusable_reason)
-        obj = first_json(res.text)
-        ok, why = (False, "no json") if obj is None else _validate(obj, schema)
-        return Sample(evaluator=self.name, case_id=tid, group="json_schema", dims=dims,
-                      score=1.0 if ok else 0.0, passed=ok,
-                      input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-                      latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-                      meta={"why": why, "answer": res.text[:200]})
+        def grade(res) -> Verdict:
+            obj = first_json(res.text)
+            ok, why = (False, "no json") if obj is None else _validate(obj, schema)
+            return Verdict(score=1.0 if ok else 0.0, passed=ok,
+                           meta={"why": why, "answer": res.text[:200]})
+
+        return await self._case(ctx, cfg, tid, prompt, "json_schema", grade)
 
     async def _tool(self, ctx, cfg, tid, prompt, spec) -> Sample:
-        dims = {"task": "tool_call"}
-        try:
-            res = await self._gen(ctx, cfg, prompt)
-        except Exception as e:
-            return Sample(evaluator=self.name, case_id=tid, group="tool_call",
-                          dims=dims, error=repr(e))
-        if res.unusable_reason:
-            return Sample(evaluator=self.name, case_id=tid, group="tool_call",
-                          dims=dims, skipped=res.unusable_reason)
-        obj = first_json(res.text)
-        ok, why = self._grade_tool(obj, spec)
-        return Sample(evaluator=self.name, case_id=tid, group="tool_call", dims=dims,
-                      score=1.0 if ok else 0.0, passed=ok,
-                      input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-                      latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-                      meta={"why": why, "answer": res.text[:200]})
+        def grade(res) -> Verdict:
+            ok, why = self._grade_tool(first_json(res.text), spec)
+            return Verdict(score=1.0 if ok else 0.0, passed=ok,
+                           meta={"why": why, "answer": res.text[:200]})
+
+        return await self._case(ctx, cfg, tid, prompt, "tool_call", grade)
 
     def _grade_tool(self, obj, spec) -> tuple[bool, str]:
         if not isinstance(obj, dict):
@@ -146,15 +130,3 @@ class StructuredEvaluator(Evaluator):
             if str(args.get(k, "")).strip().lower() != str(v).lower():
                 return False, f"arg {k!r} = {args.get(k)!r} != {v!r}"
         return True, "ok"
-
-    def aggregate(self, samples: list[Sample]) -> list[Metric]:
-        metrics = super().aggregate(samples)
-        graded = [s for s in samples if s.error is None and s.passed is not None]
-        by_task: dict[str, list[bool]] = {}
-        for s in graded:
-            by_task.setdefault(s.dims["task"], []).append(bool(s.passed))
-        for task, v in sorted(by_task.items()):
-            metrics.append(Metric(evaluator=self.name, name="pass_rate",
-                                  value=round(sum(v) / len(v), 4), n=len(v),
-                                  dims={"task": task}))
-        return metrics

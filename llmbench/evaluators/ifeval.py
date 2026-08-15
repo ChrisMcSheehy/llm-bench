@@ -13,7 +13,7 @@ import re
 from typing import Callable
 
 from llmbench.evaluators._extract import first_json
-from llmbench.evaluators.base import EvalContext, Evaluator
+from llmbench.evaluators.base import EvalContext, Evaluator, Verdict
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
 
@@ -98,27 +98,16 @@ class IFEvalEvaluator(Evaluator):
         cfg = self.resolve_config(ctx.config)
         out = []
         for tid, prompt, checks in _TASKS:
-            try:
-                res = await ctx.generate([{"role": "user", "content": prompt}],
-                                         max_tokens=cfg["max_tokens"],
-                                         temperature=cfg["temperature"])
-            except Exception as e:
-                out.append(Sample(evaluator=self.name, case_id=tid, error=repr(e)))
-                continue
-            if res.unusable_reason:
-                out.append(Sample(evaluator=self.name, case_id=tid,
-                                  skipped=res.unusable_reason))
-                continue
-            results = [(label, bool(chk(res.text))) for label, chk in checks]
-            met = sum(1 for _, ok in results if ok)
-            all_ok = met == len(results)
-            out.append(Sample(
-                evaluator=self.name, case_id=tid, group=tid,
-                dims={"n_constraints": len(results)},
-                score=met / len(results), passed=all_ok,
-                input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-                latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-                meta={"checks": dict(results), "answer": res.text[:200]}))
+            def grade(res, checks=checks) -> Verdict:
+                results = [(label, bool(chk(res.text))) for label, chk in checks]
+                met = sum(1 for _, ok in results if ok)
+                return Verdict(score=met / len(results), passed=met == len(results),
+                               meta={"checks": dict(results), "answer": res.text[:200]})
+
+            out.append(await self.run_case(
+                ctx, case_id=tid, group=tid, dims={"n_constraints": len(checks)},
+                messages=[{"role": "user", "content": prompt}], grade=grade,
+                max_tokens=cfg["max_tokens"], temperature=cfg["temperature"]))
         return out
 
     def aggregate(self, samples: list[Sample]) -> list[Metric]:
