@@ -1,0 +1,6 @@
+{"id":"q1","subject":"physics","question":"A ball is dropped from rest. Ignoring air resistance, after 2 seconds its speed is closest to:","options":["5 m/s","10 m/s","20 m/s","40 m/s"],"answer":"C"}
+{"id":"q2","subject":"biology","question":"Which organelle is chiefly responsible for producing ATP in eukaryotic cells?","options":["Ribosome","Mitochondrion","Golgi apparatus","Nucleus"],"answer":"B"}
+{"id":"q3","subject":"logic","question":"Some cats are black. All black things absorb heat. Which must be true?","options":["All cats absorb heat","Some cats absorb heat","No cats absorb heat","Only black things are cats"],"answer":"B"}
+{"id":"q4","subject":"cs","question":"The average time complexity of a lookup in a well-distributed hash table is:","options":["O(1)","O(log n)","O(n)","O(n log n)"],"answer":"A"}
+{"id":"q5","subject":"geography","question":"Which of these capital cities lies furthest north?","options":["Madrid","Oslo","Rome","Athens"],"answer":"B"}
+{"id":"q6","subject":"cs","question":"In ACID, the 'I' stands for:","options":["Integrity","Isolation","Indexing","Inheritance"],"answer":"B"}

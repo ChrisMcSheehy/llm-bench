@@ -1,0 +1,7 @@
+id: balanced_brackets
+entrypoint: is_balanced
+timeout_s: 15
+prompt: |
+  Implement is_balanced(s) -> bool. Return True iff the brackets in `s` are
+  balanced. Consider three bracket types: () [] {}. Non-bracket characters are
+  ignored. Correct nesting and matching type are required.

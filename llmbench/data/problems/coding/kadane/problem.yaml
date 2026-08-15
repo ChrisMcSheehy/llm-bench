@@ -1,0 +1,6 @@
+id: kadane
+entrypoint: max_subarray
+timeout_s: 15
+prompt: |
+  Implement max_subarray(nums) returning the largest sum of any non-empty
+  contiguous subarray (Kadane's algorithm). `nums` may contain negatives.

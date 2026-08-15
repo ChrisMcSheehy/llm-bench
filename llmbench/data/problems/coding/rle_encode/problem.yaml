@@ -1,0 +1,7 @@
+id: rle_encode
+entrypoint: rle_encode
+timeout_s: 15
+prompt: |
+  Implement rle_encode(s) performing run-length encoding of a string. Each run
+  of a repeated character becomes the character followed by the run length, e.g.
+  "aaabbc" -> "a3b2c1". An empty string returns "".

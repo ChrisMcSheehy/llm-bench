@@ -1,0 +1,5 @@
+# Store every text file with LF endings, whatever platform it was committed from.
+# This project is developed on Windows and expected to run on macOS and Linux; without
+# this, line endings follow each contributor's local git config and produce diffs that
+# show every line of a file as changed when nothing was.
+* text=auto eol=lf

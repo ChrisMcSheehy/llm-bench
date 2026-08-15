@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+
+# Per-developer Claude Code overrides. Shared .claude/ config is committed; this file
+# is local to one machine.
+.claude/settings.local.json
+# Results database (the old default location). NOT llmbench/data/, which is
+# bundled test data and must be committed.
+/data/
+*.db
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Design documents and implementation plans are kept outside this repository.
+# See docs/ironclad/README.md.
+docs/ironclad/DESIGN-*.md
+docs/ironclad/plans/

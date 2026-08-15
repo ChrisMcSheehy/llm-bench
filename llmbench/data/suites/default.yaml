@@ -1,0 +1,52 @@
+# A suite = which backends to test, and which test modules to run against them.
+# Each target is auto-detected (model, quant, KV-cache, MTP, llama.cpp commit)
+# and results are filed under that fingerprint.
+name: default
+
+targets:
+  - engine: llama.cpp
+    base_url: http://localhost:8080
+  # - engine: ollama
+  #   base_url: http://localhost:11434
+  #   model: qwen3:14b
+  # - engine: openrouter
+  #   model: qwen/qwen3-235b-a22b
+  #   api_key_env: OPENROUTER_API_KEY
+
+evaluators:
+  # --- capability probes (deterministic, quant-sensitive) ---------------
+  mcqa:                       # MMLU / ARC / HellaSwag / TruthfulQA / GPQA family
+    # No data_file -> the bundled sample set. Point data_file at your own JSONL for
+    # real numbers; a path that does not exist is an error, not a silent fallback.
+  math_qa:                    # GSM8K / MATH numeric
+    cot: true
+  ifeval:                     # verifiable instruction following
+  structured:                 # JSON-schema + function/tool calling
+  text2sql:                   # execution-accuracy over a bundled SQLite DB
+
+  # --- long context (KV-cache stress) -----------------------------------
+  needle:                     # single-needle NIAH across context x depth
+    depths: [0, 25, 50, 75, 100]
+  long_context:               # RULER/MRCR-style multi-key + variable tracking
+    tasks: [multikey, vartrack]
+
+  # --- code -------------------------------------------------------------
+  coding:
+    execute: true
+
+  # --- human eval (generates responses; rate them in the dashboard Arena) -
+  human:
+    # temperature 0.7 so you compare each config's natural voice.
+    # Run this with 2+ targets to populate blind A/B matchups.
+
+  # --- one-shot builds (design/coding potential; render + rate in Gallery) -
+  oneshot:
+    # Large, slower generations (max_tokens 4096). Each asks for a
+    # self-contained HTML artifact (game, dashboard, animation, app).
+    # View + star-rate rendered results at /gallery; blind A/B at /arena.
+
+  # --- raw quant fidelity (local binary; opt-in) ------------------------
+  # perplexity:
+  #   binary: llama-perplexity        # or full path to the built binary
+  #   ctx: 4096
+  #   extra_args: ["-ngl", "99", "-fa", "on"]

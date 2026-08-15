@@ -1,0 +1,5 @@
+Available devices:
+  CUDA0: NVIDIA GeForce RTX 4060 Ti (15944 MiB, 14143 MiB free)
+  ROCm0: AMD Radeon RX 7900 XTX (24560 MiB, 23749 MiB free)
+  Metal: Apple M3 Max (32768 MiB, 30000 MiB free)
+  SYCL0: Intel Arc A770 (16384 MiB, 16000 MiB free)

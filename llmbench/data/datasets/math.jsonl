@@ -1,0 +1,5 @@
+{"id":"g1","type":"gsm8k","question":"A baker makes 12 loaves per batch and bakes 5 batches. He sells 48 loaves. How many are left?","answer":"12"}
+{"id":"g2","type":"gsm8k","question":"A train travels 60 km in 45 minutes. At the same speed, how far does it travel in 3 hours, in km?","answer":"240"}
+{"id":"g3","type":"math","question":"Evaluate the sum of the first 10 positive integers.","answer":"55"}
+{"id":"g4","type":"gsm8k","question":"Sara has £50. She buys 3 books at £8.50 each. How much money does she have left, in pounds?","answer":"24.5"}
+{"id":"g5","type":"math","question":"What is the greatest common divisor of 48 and 60?","answer":"12"}

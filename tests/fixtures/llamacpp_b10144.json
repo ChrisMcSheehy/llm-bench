@@ -1,0 +1,175 @@
+{
+  "_source": "Captured from llama-server b10144-d73c1d6b2 on 2026-08-04. See docs/ironclad/PROBE-2026-08-04-model-shape.md. Plain mode was launched with: -c 2048 -ngl 99 --embeddings",
+  "plain": {
+    "props": {
+      "default_generation_settings": {
+        "params": {
+          "seed": 4294967295,
+          "temperature": 0.800000011920929,
+          "dynatemp_range": 0.0,
+          "dynatemp_exponent": 1.0,
+          "top_k": 40,
+          "top_p": 0.949999988079071,
+          "min_p": 0.05000000074505806,
+          "top_n_sigma": -1.0,
+          "xtc_probability": 0.0,
+          "xtc_threshold": 0.10000000149011612,
+          "typical_p": 1.0,
+          "repeat_last_n": 64,
+          "repeat_penalty": 1.0,
+          "presence_penalty": 0.0,
+          "frequency_penalty": 0.0,
+          "dry_multiplier": 0.0,
+          "dry_base": 1.75,
+          "dry_allowed_length": 2,
+          "dry_penalty_last_n": -1,
+          "mirostat": 0,
+          "mirostat_tau": 5.0,
+          "mirostat_eta": 0.10000000149011612,
+          "adaptive_target": -1.0,
+          "adaptive_decay": 0.8999999761581421,
+          "max_tokens": -1,
+          "n_predict": -1,
+          "n_keep": 0,
+          "n_discard": 0,
+          "ignore_eos": false,
+          "stream": false,
+          "n_probs": 0,
+          "min_keep": 0,
+          "chat_format": "Content-only",
+          "reasoning_format": "none",
+          "reasoning_in_content": false,
+          "generation_prompt": "",
+          "samplers": [
+            "penalties",
+            "dry",
+            "top_n_sigma",
+            "top_k",
+            "typ_p",
+            "top_p",
+            "min_p",
+            "xtc",
+            "temperature"
+          ],
+          "speculative.types": "none",
+          "timings_per_token": false,
+          "post_sampling_probs": false,
+          "backend_sampling": false,
+          "lora": []
+        },
+        "n_ctx": 2048
+      },
+      "total_slots": 4,
+      "model_alias": "C:/Users/chris/AppData/Roaming/Locally Uncensored/models/nomic-embed-text-v1.5.Q4_K_M.gguf",
+      "model_ftype": "Q4_K - Medium",
+      "model_path": "C:/Users/chris/AppData/Roaming/Locally Uncensored/models/nomic-embed-text-v1.5.Q4_K_M.gguf",
+      "modalities": {
+        "vision": false,
+        "video": false,
+        "audio": false
+      },
+      "media_marker": "<__media_C5WDdtuTjXNIORVXqPNGl5WdLOUPnr3F__>",
+      "endpoint_slots": true,
+      "endpoint_props": false,
+      "endpoint_metrics": false,
+      "bos_token": "[CLS]",
+      "eos_token": "[SEP]",
+      "build_info": "b10144-d73c1d6b2",
+      "is_sleeping": false,
+      "cors_proxy_enabled": false
+    },
+    "v1_models": {
+      "models": [
+        {
+          "name": "C:/Users/chris/AppData/Roaming/Locally Uncensored/models/nomic-embed-text-v1.5.Q4_K_M.gguf",
+          "model": "C:/Users/chris/AppData/Roaming/Locally Uncensored/models/nomic-embed-text-v1.5.Q4_K_M.gguf",
+          "modified_at": "",
+          "size": "",
+          "digest": "",
+          "type": "model",
+          "description": "",
+          "tags": [
+            ""
+          ],
+          "capabilities": [
+            "completion"
+          ],
+          "parameters": "",
+          "details": {
+            "parent_model": "",
+            "format": "gguf",
+            "family": "",
+            "families": [
+              ""
+            ],
+            "parameter_size": "",
+            "quantization_level": ""
+          }
+        }
+      ],
+      "object": "list",
+      "data": [
+        {
+          "id": "C:/Users/chris/AppData/Roaming/Locally Uncensored/models/nomic-embed-text-v1.5.Q4_K_M.gguf",
+          "aliases": [
+            "C:/Users/chris/AppData/Roaming/Locally Uncensored/models/nomic-embed-text-v1.5.Q4_K_M.gguf"
+          ],
+          "tags": [],
+          "object": "model",
+          "created": 1785853404,
+          "owned_by": "llamacpp",
+          "meta": {
+            "vocab_type": 3,
+            "n_vocab": 30522,
+            "n_ctx": 2048,
+            "n_ctx_train": 2048,
+            "n_embd": 768,
+            "n_params": 136727040,
+            "size": 83349984,
+            "ftype": "Q4_K - Medium"
+          }
+        }
+      ]
+    }
+  },
+  "router": {
+    "v1_models": {
+      "data": [
+        {
+          "id": "nomic-embed-text-v1.5.Q4_K_M",
+          "aliases": [],
+          "tags": [],
+          "object": "model",
+          "owned_by": "llamacpp",
+          "created": 1785853590,
+          "status": {
+            "value": "unloaded",
+            "args": [
+              "C:\\Users\\chris\\AppData\\Local\\Microsoft\\WinGet\\Packages\\ggml.llamacpp_Microsoft.Winget.Source_8wekyb3d8bbwe\\llama-server.EXE",
+              "--host",
+              "127.0.0.1",
+              "--port",
+              "0",
+              "--alias",
+              "nomic-embed-text-v1.5.Q4_K_M",
+              "--model",
+              "C:/Users/chris/AppData/Roaming/Locally Uncensored/models\\nomic-embed-text-v1.5.Q4_K_M.gguf"
+            ],
+            "preset": "[nomic-embed-text-v1.5.Q4_K_M]\nmodel = C:/Users/chris/AppData/Roaming/Locally Uncensored/models\\nomic-embed-text-v1.5.Q4_K_M.gguf\n\n"
+          },
+          "architecture": {
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ]
+          },
+          "source": "models_dir",
+          "can_remove": false
+        }
+      ],
+      "object": "list"
+    }
+  }
+}

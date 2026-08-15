@@ -1,0 +1,7 @@
+id: two_sum
+entrypoint: two_sum
+timeout_s: 15
+prompt: |
+  Implement two_sum(nums, target). Given a list of integers `nums` and an
+  integer `target`, return a tuple (i, j) of indices such that nums[i] + nums[j]
+  == target, with i < j. Exactly one solution exists. You may not reuse an index.

@@ -1,0 +1,115 @@
+# Runs the test suite on every operating system this project claims to support.
+#
+# Why this file exists: the coding harness takes two entirely different code paths to
+# kill a timed-out test run — process groups on macOS and Linux, `taskkill /F /T` on
+# Windows — and before this workflow, only the Windows path had ever been executed.
+# Cross-platform support that has never been observed is an aspiration; running it is
+# the only thing that turns it into a fact. This also guards the explicit UTF-8 on
+# every file read and write, which is exactly the kind of change that regresses
+# silently on a machine with a different locale.
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push makes an in-flight run of the same branch irrelevant, so stop it.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: tests · ${{ matrix.os }} · py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      # Never stop at the first red job. When a break is platform-specific, *which*
+      # platforms failed is the most useful thing this run can tell you, and
+      # fail-fast throws that away.
+      fail-fast: false
+      matrix:
+        # Every OS runs the oldest and the newest Python the project promises
+        # (pyproject.toml: requires-python = ">=3.10"), because breaks cluster at
+        # the boundaries. The versions in between run on Linux only: a break that
+        # is both version-specific *and* OS-specific is rare enough not to pay for
+        # fifteen jobs instead of nine.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.14"]
+        include:
+          - {os: ubuntu-latest, python: "3.11"}
+          - {os: ubuntu-latest, python: "3.12"}
+          - {os: ubuntu-latest, python: "3.13"}
+    steps:
+      - uses: actions/checkout@v7
+
+      # No pip cache here on purpose: the dependency set is small, and a cache
+      # misconfiguration would be one more thing failing in a run whose whole job
+      # is to report on the project rather than on itself.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install
+        run: pip install -e ".[exec]"
+
+      - name: Run the full suite
+        run: pytest -q
+
+  packaging:
+    name: packaged wheel · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        # bash is present on all three runners, so one set of commands works
+        # everywhere and nothing here has to be written twice.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Build a wheel
+        run: |
+          pip install build
+          python -m build --wheel
+
+      - name: Install the wheel
+        run: pip install dist/*.whl
+
+      # The `tests` job above cannot catch a wheel that ships no data: pytest is
+      # configured with pythonpath = ["."], so it imports llmbench from the working
+      # tree, where the data files are sitting regardless of what got packaged.
+      # Running from an unrelated directory against a non-editable install is the
+      # only check that can tell the difference.
+      - name: Prove the installed copy carries its own data
+        working-directory: ${{ runner.temp }}
+        run: |
+          python - <<'PY'
+          from llmbench.resources import data_path
+
+          dataset = data_path("datasets", "mcqa.jsonl")
+          assert dataset.exists(), f"bundled dataset missing from the wheel: {dataset}"
+          assert dataset.read_text(encoding="utf-8").strip(), "bundled dataset is empty"
+
+          suite = data_path("suites", "default.yaml")
+          assert suite.exists(), f"default suite missing from the wheel: {suite}"
+
+          problems = data_path("problems", "coding")
+          names = sorted(p.name for p in problems.iterdir() if p.is_dir())
+          assert names == ["balanced_brackets", "kadane", "rle_encode", "two_sum"], names
+
+          print(f"packaged data OK: {len(names)} coding problems, dataset at {dataset}")
+          PY
+
+      - name: Prove the command-line entry point works from anywhere
+        working-directory: ${{ runner.temp }}
+        run: llmbench evaluators

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llmbench · model test bench</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root{
+    --bg:#0e1418; --panel:#151d23; --panel2:#111a1f; --line:#243139;
+    --ink:#c7d3da; --mut:#7d8f9a; --dim:#546570;
+    --sig:#4fd6c8; --sig2:#f2b23e; --bad:#e5646e;
+    --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+       font-size:14px;line-height:1.5}
+  a{color:var(--sig);text-decoration:none}
+  .wrap{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+  /* left rail */
+  .rail{background:var(--panel2);border-right:1px solid var(--line);
+        padding:18px 0;overflow-y:auto;max-height:100vh}
+  .brand{padding:0 20px 16px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .brand h1{font-size:15px;letter-spacing:.14em;text-transform:uppercase;margin:0;
+            font-weight:600}
+  .brand h1 .dot{color:var(--sig)}
+  .brand p{margin:4px 0 0;color:var(--dim);font-size:11px;font-family:var(--mono)}
+  .runitem{padding:11px 20px;cursor:pointer;border-left:2px solid transparent}
+  .runitem:hover{background:#18242b}
+  .runitem.active{background:#16232a;border-left-color:var(--sig)}
+  .runitem .lbl{font-family:var(--mono);font-size:12px;color:var(--ink);
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .runitem .sub{color:var(--dim);font-size:10.5px;margin-top:2px}
+  /* main */
+  .main{padding:26px 30px 60px;overflow-y:auto;max-height:100vh}
+  .nameplate{background:linear-gradient(180deg,#17222a,#131c22);
+             border:1px solid var(--line);border-radius:8px;padding:16px 18px;
+             display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+  .nameplate .title{font-family:var(--mono);font-size:16px;font-weight:600;
+                    color:#e8f0f3;margin-right:6px}
+  .chip{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:4px;
+        border:1px solid var(--line);background:#0f171c;color:var(--mut)}
+  .chip b{color:var(--ink);font-weight:600}
+  .chip.sig{border-color:#2c4d49;color:var(--sig)}
+  .chip.warn{border-color:#4d412a;color:var(--sig2)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+        gap:12px;margin:18px 0}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+       padding:14px 16px}
+  .kpi .k{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
+  .kpi .v{font-family:var(--mono);font-size:26px;font-weight:600;margin-top:6px;
+          color:#e8f0f3}
+  .kpi .v.sig{color:var(--sig)} .kpi .v.warn{color:var(--sig2)}
+  .kpi .u{font-size:12px;color:var(--mut);margin-left:4px}
+  .kpi .n{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:4px;
+          letter-spacing:.04em}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+        padding:14px 16px 8px;margin-bottom:16px}
+  .card h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;
+           color:var(--mut);margin:0 0 6px;font-weight:600}
+  .card h2 .hint{color:var(--dim);text-transform:none;letter-spacing:0;
+                 font-family:var(--mono);float:right;font-weight:400}
+  .plot{width:100%;height:320px}
+  .plot.tall{height:380px}
+  .empty{color:var(--dim);font-family:var(--mono);font-size:12px;padding:40px 0;
+         text-align:center}
+  .eyebrow{font-family:var(--mono);font-size:11px;color:var(--dim);
+           letter-spacing:.1em;margin:26px 0 10px;text-transform:uppercase}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}.grid{grid-template-columns:1fr}
+    .rail{max-height:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="rail">
+    <div class="brand"><h1>llm<span class="dot">·</span>bench</h1>
+      <p id="railmeta">loading runs…</p>
+      <p style="margin-top:8px"><a href="/arena">→ human arena (rate configs)</a></p>
+      <p style="margin-top:4px"><a href="/gallery">→ one-shot gallery (render + rate)</a></p>
+      <p style="margin-top:4px"><a href="/servers">→ servers (launch a build)</a></p>
+      <p style="margin-top:4px"><a href="/configs">→ configurations (effort behind each)</a></p></div>
+    <div id="runlist"></div>
+  </aside>
+  <main class="main" id="main">
+    <div class="empty">Select a run from the left, or run <code>llmbench run</code>.</div>
+  </main>
+</div>
+<script>
+const TEAL="#4fd6c8", AMBER="#f2b23e", INK="#c7d3da", MUT="#7d8f9a", LINE="#243139";
+const HEAT=[[0,"#0f171c"],[0.25,"#123a3c"],[0.5,"#1c6b64"],[0.75,"#37b3a5"],[1,"#7cf3e4"]];
+const PL={paper_bgcolor:"rgba(0,0,0,0)",plot_bgcolor:"rgba(0,0,0,0)",
+  font:{color:MUT,family:"ui-monospace,monospace",size:11},
+  margin:{l:56,r:16,t:10,b:44},xaxis:{gridcolor:LINE,zerolinecolor:LINE},
+  yaxis:{gridcolor:LINE,zerolinecolor:LINE}};
+const CFG={displayModeBar:false,responsive:true};
+const fmtN=n=>n>=1e6?(n/1e6).toFixed(n%1e6?1:0)+"M":n>=1e3?(n/1e3)+"k":""+n;
+const fmtBytes=b=>b>=1024**3?(b/1024**3).toFixed(2)+" GiB":(b/1024**2).toFixed(0)+" MiB";
+const j=async u=>(await fetch(u)).json();
+
+async function boot(){
+  const runs=await j("/api/runs");
+  document.getElementById("railmeta").textContent=runs.length+" runs stored";
+  const list=document.getElementById("runlist");
+  if(!runs.length){list.innerHTML='<div class="empty">no runs</div>';return;}
+  list.innerHTML=runs.map(r=>`<div class="runitem" data-id="${r.run_id}">
+    <div class="lbl">${r.label||r.model_name||r.run_id}</div>
+    <div class="sub">${r.engine} · ${(r.started_at||"").slice(0,16).replace("T"," ")} · ${r.status}</div>
+  </div>`).join("");
+  list.querySelectorAll(".runitem").forEach(el=>el.onclick=()=>{
+    list.querySelectorAll(".runitem").forEach(x=>x.classList.remove("active"));
+    el.classList.add("active"); loadRun(el.dataset.id, runs.find(r=>r.run_id===el.dataset.id));
+  });
+  list.firstElementChild.click();
+}
+
+async function loadRun(id,r){
+  const [metrics,needle,coding,thr,cap,skipped]=await Promise.all([
+    j(`/api/run/${id}/metrics`), j(`/api/run/${id}/needle`),
+    j(`/api/run/${id}/coding`), j(`/api/run/${id}/throughput`),
+    j(`/api/run/${id}/capabilities`), j(`/api/run/${id}/skipped`)]);
+  // The whole row, not just the value: every tile below shows the count beside it.
+  const m=Object.fromEntries(metrics.filter(x=>x.dims_json==="{}")
+        .map(x=>[`${x.evaluator}.${x.name}`,x]));
+  const val=k=>m[k]?.value, cnt=k=>m[k]?m[k].n:undefined;
+  const errors=totalOf(metrics,"error_count");
+  const kv=r.kv_cache_k===r.kv_cache_v?r.kv_cache_k:`${r.kv_cache_k}/${r.kv_cache_v}`;
+  const spec=(r.spec_type&&r.spec_type!=="none")?r.spec_type:null;
+
+  const main=document.getElementById("main");
+  main.innerHTML=`
+    <div class="nameplate">
+      <span class="title">${r.label||r.model_name}</span>
+      ${chip("engine",r.engine)}
+      ${r.quant?chip("quant",r.quant,"sig"):""}
+      ${kv&&kv!=="null"?chip("kv-cache",kv,kv&&kv!=="f16"?"warn":""):""}
+      ${r.n_ctx?chip("n_ctx",fmtN(r.n_ctx)):""}
+      ${r.kv_cache_bytes?chip("kv cache (est)",fmtBytes(r.kv_cache_bytes),"warn"):""}
+      ${spec?chip("spec",spec,"warn"):""}
+      ${chip("machine", r.host_label||"unknown", r.host_label?"":"warn")}
+      ${r.build_commit?chip("commit",r.build_commit.slice(0,7)):""}
+    </div>
+    <div class="kpis">
+      ${kpi("needle recall",pct(val("needle.score_mean")),"sig","",cnt("needle.score_mean"))}
+      ${kpi("effective ctx",val("needle.effective_ctx")?fmtN(val("needle.effective_ctx")):"—",
+            "","",cnt("needle.effective_ctx"))}
+      ${kpi("coding pass@1",pct(val("coding.pass@1")??val("coding.pass_rate")),"warn","",
+            cnt("coding.pass@1")??cnt("coding.pass_rate"))}
+      ${kpi("gen speed",val("needle.tok_per_sec_mean")?.toFixed(1)
+            ??val("coding.tok_per_sec_mean")?.toFixed(1)??"—","","tok/s",
+            cnt("needle.tok_per_sec_mean")??cnt("coding.tok_per_sec_mean"))}
+      ${cap.perplexity!=null?kpi("perplexity",cap.perplexity.toFixed(3),"warn","",1):""}
+      ${kpi("errors",errors.value||"0","","",errors.n)}
+      ${kpi("not attempted",skipped.length||"0","",skipped.length?"rungs":"",skipped.length)}
+    </div>
+    <div class="eyebrow">capabilities — headline score per test module</div>
+    <div class="card"><h2>capability profile<span class="hint">0–1 · higher is better</span></h2>
+      <div id="pCap" class="plot"></div></div>
+    <div class="eyebrow">retrieval — recall by context length × insertion depth</div>
+    <div class="card"><h2>needle heatmap<span class="hint">1.0 = code recalled</span></h2>
+      <div id="pNeedle" class="plot tall"></div></div>
+    ${skipped.length?`<div class="card"><h2>not attempted<span class="hint">why a
+      figure is missing, rather than a missing figure</span></h2>
+      ${skipped.map(s=>`<div class="sub">${s.evaluator} · ${s.skipped}</div>`).join("")}
+      </div>`:""}
+    <div class="grid">
+      <div class="card"><h2>throughput vs context<span class="hint">gen tok/s</span></h2>
+        <div id="pThr" class="plot"></div></div>
+      <div class="card"><h2>coding — pass rate by problem</h2>
+        <div id="pCode" class="plot"></div></div>
+    </div>
+    <div class="eyebrow">regression — metric across runs (build / time)</div>
+    <div class="card"><h2>trend<span class="hint">needle recall over runs</span></h2>
+      <div id="pTrend" class="plot"></div></div>`;
+
+  drawCap(cap.scores); drawNeedle(needle); drawThr(thr); drawCode(coding); drawTrend();
+}
+
+function totalOf(metrics,name){
+  // Sums a count across the modules that reported it. If any module did not state
+  // its count the total is unknown rather than a smaller number that looks complete.
+  const rows=metrics.filter(x=>x.dims_json==="{}"&&x.name===name);
+  return {value:rows.reduce((a,x)=>a+(x.value||0),0),
+          n:rows.length&&rows.every(x=>x.n!=null)?rows.reduce((a,x)=>a+x.n,0):null};
+}
+function drawCap(scores){
+  const el=document.getElementById("pCap");
+  if(!scores||!scores.length){el.innerHTML='<div class="empty">no capability metrics</div>';return;}
+  Plotly.newPlot(el,[{x:scores.map(s=>s.evaluator),y:scores.map(s=>s.score),
+    type:"bar",marker:{color:scores.map(s=>s.score>=0.8?TEAL:s.score>=0.5?AMBER:"#e5646e")},
+    text:scores.map(s=>(s.score*100).toFixed(0)+"% · n"+(s.n==null?" —":"="+s.n)),
+    textposition:"outside",
+    textfont:{color:INK,size:11}}],
+    {...PL,yaxis:{...PL.yaxis,range:[0,1.05],title:"score"},
+     xaxis:{...PL.xaxis,tickangle:-20}},CFG);
+}
+
+const chip=(k,v,c="")=>`<span class="chip ${c}">${k} <b>${v}</b></span>`;
+const kpi=(k,v,c="",u="",n)=>`<div class="kpi"><div class="k">${k}</div>
+  <div class="v ${c}">${v}${u?`<span class="u">${u}</span>`:""}</div>
+  <div class="n">${n===undefined?"&nbsp;":n===null?"n —":"n = "+n}</div></div>`;
+const pct=v=>v==null?"—":(v*100).toFixed(1)+"%";
+
+function drawNeedle(d){
+  const el=document.getElementById("pNeedle");
+  if(!d.lengths?.length){el.innerHTML='<div class="empty">no needle samples</div>';return;}
+  Plotly.newPlot(el,[{z:d.z,x:d.lengths.map(fmtN),y:d.depths.map(v=>v+"%"),
+    type:"heatmap",colorscale:HEAT,zmin:0,zmax:1,xgap:2,ygap:2,
+    customdata:d.n,
+    hovertemplate:"ctx %{x} · depth %{y}<br>recall %{z}<br>n = %{customdata}<extra></extra>",
+    colorbar:{thickness:10,len:.9,tickfont:{size:10}}}],
+    {...PL,xaxis:{...PL.xaxis,title:"context length",type:"category"},
+     yaxis:{...PL.yaxis,title:"depth",type:"category"}},CFG);
+}
+function drawThr(rows){
+  const el=document.getElementById("pThr");
+  if(!rows?.length){el.innerHTML='<div class="empty">no throughput data</div>';return;}
+  const x=rows.map(r=>fmtN(+r.context_len));
+  Plotly.newPlot(el,[
+    {x,y:rows.map(r=>r.tok_per_sec),name:"wall",mode:"lines+markers",
+     line:{color:TEAL,width:2},marker:{size:6}},
+    {x,y:rows.map(r=>r.server_gen_tps),name:"server",mode:"lines+markers",
+     line:{color:AMBER,width:1.5,dash:"dot"},marker:{size:5}}],
+    {...PL,legend:{orientation:"h",y:1.15,font:{size:10}},
+     xaxis:{...PL.xaxis,title:"context length",type:"category"},
+     yaxis:{...PL.yaxis,title:"tok/s"}},CFG);
+}
+function drawCode(rows){
+  const el=document.getElementById("pCode");
+  if(!rows?.length){el.innerHTML='<div class="empty">no coding samples</div>';return;}
+  Plotly.newPlot(el,[{x:rows.map(r=>r.problem),y:rows.map(r=>r.pass_rate),
+    type:"bar",marker:{color:rows.map(r=>r.pass_rate>=1?TEAL:r.pass_rate>0?AMBER:"#e5646e")},
+    text:rows.map(r=>"n="+r.n),textposition:"outside",textfont:{color:MUT,size:10},
+    hovertemplate:"%{x}<br>pass rate %{y}<br>n = %{text}<extra></extra>"}],
+    {...PL,yaxis:{...PL.yaxis,range:[0,1.1],title:"pass rate"},
+     xaxis:{...PL.xaxis,tickangle:-30}},CFG);
+}
+async function drawTrend(){
+  const el=document.getElementById("pTrend");
+  const d=await j("/api/trend?evaluator=needle&metric=score_mean");
+  if(!d?.length){el.innerHTML='<div class="empty">need ≥2 runs for a trend</div>';return;}
+  Plotly.newPlot(el,[{x:d.map(r=>r.build_commit?r.build_commit.slice(0,7):(r.started_at||"").slice(5,16)),
+    y:d.map(r=>r.value),mode:"lines+markers",line:{color:TEAL,width:2},
+    marker:{size:7},text:d.map(r=>r.label),hovertemplate:"%{text}<br>%{y:.3f}<extra></extra>"}],
+    {...PL,yaxis:{...PL.yaxis,range:[0,1],title:"recall"},
+     xaxis:{...PL.xaxis,title:"build / run"}},CFG);
+}
+boot();
+</script>
+</body>
+</html>
