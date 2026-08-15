@@ -128,6 +128,18 @@ docs/ironclad/  design docs, plans, lessons
   generated, because `store.py`'s `QUALITY_METRICS` reads those names to decide what may
   be pooled across machines. `coding` keeps its own loop: its buckets already exist for
   `pass@k`, and deriving the same figures twice by two rules would let them disagree.
+- **2026-08-15 — a test module may live in a separately installed package.**
+  `registry.discover()` reads the `llmbench.evaluators` entry-point group after scanning
+  the built-in folder (design E4), so extending the tool no longer means editing it. The
+  group name is a public contract: renaming it unregisters every plugin anyone has
+  published. Loading the entry point is the whole mechanism, because `@register` is what
+  registers — one rule, whether the entry point names a module or a class. Built-ins load
+  first so a name clash reads as the plugin being the newcomer. A plugin that fails to
+  import stops discovery with an error naming it rather than being skipped: a silently
+  absent test module is indistinguishable from one never installed, and the blast radius
+  is bounded because only commands that need evaluators call discovery. This executes
+  third-party code by design — installing a package already grants that, and nothing is
+  discovered that the user did not choose to install.
 - **2026-08-15 — the quantisation scheme is part of the quant label.** `parse_quant` keeps
   an Unsloth `UD-` prefix instead of matching the plain token inside the longer name, so
   `UD-Q4_K_M` and `Q4_K_M` are two configurations rather than one. They are the same
