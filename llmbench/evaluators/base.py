@@ -136,13 +136,16 @@ class Evaluator(abc.ABC):
         except Exception as exc:                      # network, OOM, context overflow
             return Sample(**where, error=repr(exc))
         if res.unusable_reason:
-            return Sample(**where, skipped=res.unusable_reason)
+            # Asked, and nothing usable came back. That counts against the answer rate,
+            # unlike the exception above, which never got a response to judge.
+            return Sample(**where, skipped=res.unusable_reason, answered=False)
 
         verdict = grade(res)
         if inspect.isawaitable(verdict):
             verdict = await verdict
         return Sample(
             **where, score=verdict.score, passed=verdict.passed, meta=verdict.meta,
+            answered=True,
             input_tokens=res.input_tokens, output_tokens=res.output_tokens,
             latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
             server_prompt_tps=res.server_prompt_tps, server_gen_tps=res.server_gen_tps,
@@ -178,6 +181,19 @@ class Evaluator(abc.ABC):
         # Every sample still carries the raw number for forensics; what is gone is the
         # aggregate that read like a generation speed and was not one. The `speed`
         # evaluator measures reading and writing separately, at stated prompt sizes.
+
+        # Of the items this model was actually asked, how many it answered at all (design
+        # B2). Reported beside every accuracy, because an accuracy computed over an
+        # unstated subset is exactly the naked figure D7 forbids: a configuration
+        # answering 99% of questions at 85% accuracy and one answering 80% at 85% are very
+        # different, and no other figure here tells them apart.
+        #
+        # The denominator is every sample that reached the model, so a rung the machine
+        # could not hold is not counted as a question ducked.
+        asked = [s.answered for s in samples if s.answered is not None]
+        if asked:
+            metrics.append(Metric(evaluator=self.name, name="answer_rate",
+                                  value=round(sum(asked) / len(asked), 4), n=len(asked)))
 
         # Reported unconditionally, including when nothing was graded. The old early
         # return meant an evaluator whose every sample failed produced no metrics at

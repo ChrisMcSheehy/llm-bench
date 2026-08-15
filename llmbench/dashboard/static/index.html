@@ -143,6 +143,10 @@ async function loadRun(id,r){
     </div>
     <div class="kpis">
       ${kpi("needle recall",pct(val("needle.score_mean")),"sig","",cnt("needle.score_mean"))}
+      <!-- The denominator behind the figure to its left: of the questions the model was
+           asked, how many it answered at all. Two configurations at the same recall are
+           different results if one of them declined a fifth of the questions. -->
+      ${kpi("answered",pct(val("needle.answer_rate")),"","",cnt("needle.answer_rate"))}
       ${kpi("effective ctx",val("needle.effective_ctx")?fmtN(val("needle.effective_ctx")):"—",
             "","",cnt("needle.effective_ctx"))}
       ${kpi("coding pass@1",pct(val("coding.pass@1")??val("coding.pass_rate")),"warn","",

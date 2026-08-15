@@ -245,6 +245,15 @@ class Sample(BaseModel):
 
     score: Optional[float] = None               # 0..1
     passed: Optional[bool] = None
+    # Whether a gradable response arrived, which is a different question from whether it
+    # was right (design B2). True: the model answered. False: it was asked and produced
+    # nothing usable. None: it was never successfully asked - a rung the machine could not
+    # hold, or a call that failed - and so belongs in no answer rate at all.
+    #
+    # Kept separate from `skipped` because that field carries two situations a denominator
+    # must tell apart: "never attempted" and "attempted, said nothing". Both are honest
+    # gaps and only the second is a fact about the model.
+    answered: Optional[bool] = None
     error: Optional[str] = None
     # Why this was never attempted, or None if it was. A skip is not a failure: a
     # machine that cannot hold a 512k context has an honest limit, not a broken run

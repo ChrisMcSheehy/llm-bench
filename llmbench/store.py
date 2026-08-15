@@ -114,6 +114,11 @@ QUALITY_METRICS = frozenset({
     "score_mean", "pass_rate", "pass@1", "problem_pass_rate", "accuracy",
     "prompt_acc", "instruction_acc", "recall", "effective_ctx", "perplexity",
     "build_score", "error_count", "responses",
+    # How often the model answered at all is a fact about the model, not the machine: a
+    # configuration that spends its budget thinking and returns nothing does so wherever
+    # it runs (design B2). The speed metrics are deliberately absent from this set for
+    # the opposite reason.
+    "answer_rate",
 })
 
 
@@ -142,6 +147,11 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # Why a rung was never attempted. NULL means it was; a reason means this row is
         # a gap in the data rather than a result of zero (design D3).
         "skipped": "TEXT",
+        # Whether a gradable response arrived at all (design B2). 1 answered, 0 asked and
+        # said nothing, NULL never successfully asked. Rows written before this existed
+        # are NULL, which is correct: nobody recorded whether they answered, and a
+        # backfilled guess would put a measurement where there was none.
+        "answered": "INTEGER",
     },
     "metric": {
         # How many graded items this figure rests on. NULL means the aggregator did not
@@ -244,12 +254,13 @@ class Store:
             """INSERT INTO sample
                (run_id, evaluator, case_id, grp, dims_json, input_tokens, output_tokens,
                 latency_ms, tok_per_sec, server_prompt_tps, server_gen_tps, score,
-                passed, error, skipped, meta_json, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                passed, error, skipped, answered, meta_json, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             [(run_id, s.evaluator, s.case_id, s.group, json.dumps(s.dims),
               s.input_tokens, s.output_tokens, s.latency_ms, s.tok_per_sec,
               s.server_prompt_tps, s.server_gen_tps, s.score,
               None if s.passed is None else int(s.passed), s.error, s.skipped,
+              None if s.answered is None else int(s.answered),
               json.dumps(s.meta), s.created_at.isoformat()) for s in samples],
         )
         self.conn.commit()
@@ -299,7 +310,8 @@ class Store:
                LEFT JOIN host h ON h.hash=r.host_hash
                JOIN metric m ON m.run_id=r.run_id
                WHERE m.name IN ('score_mean','pass_rate','pass@1','decode_tps',
-                                'prefill_tps','effective_ctx','error_count','perplexity')
+                                'prefill_tps','effective_ctx','error_count','perplexity',
+                                'answer_rate')
                  AND json_extract(m.dims_json,'$')='{}'
                ORDER BY r.started_at DESC""")
         board: dict[str, dict] = {}

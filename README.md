@@ -189,6 +189,17 @@ carry it, and a figure whose count was never recorded shows a dash rather than a
 The memory figure is labelled **estimate** wherever it appears. It is computed from the
 model file's header and has never been checked against what a server really allocates.
 
+The same rule applies to the *denominator*. Every generating module reports an
+**answer rate** beside its accuracy: of the questions the model was actually
+asked, how many produced a gradable response at all. A configuration answering
+99% of questions at 85% accuracy and one answering 80% at 85% are very different,
+and nothing else on the row tells them apart.
+
+A response that never arrived is excluded from the accuracy rather than scored
+zero — but it counts against the answer rate, because being asked and saying
+nothing is a fact about the model. A test the machine could never run counts
+against neither: an honest limit is not a question ducked.
+
 ### How much testing a configuration has had
 
 `http://127.0.0.1:8900/configs` lists every configuration with the evidence behind it: how
@@ -591,7 +602,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 325 automated checks across 45 files. Almost every one of them
+`llmbench` has 346 automated checks across 46 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 

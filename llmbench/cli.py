@@ -296,14 +296,18 @@ def runs():
     # Reading and writing speed are two columns because they are two measurements with
     # different bottlenecks (design B3). One blended column used to sit here and moved
     # mostly with the prompt size it never mentioned.
-    for col in ("label", "engine", "kv", "machine", "needle.recall", "coding.pass@1",
-                "speed.prefill", "speed.decode"):
+    # `answered` sits beside the recall it qualifies (design B2). Two configurations at
+    # 0.85 recall are not the same result if one of them answered nine questions in ten
+    # and the other answered every one, and no other column here says so.
+    for col in ("label", "engine", "kv", "machine", "needle.recall", "needle.answered",
+                "coding.pass@1", "speed.prefill", "speed.decode"):
         t.add_column(col)
     for r in board:
         t.add_row(
             str(r.get("label", "")), str(r.get("engine", "")), str(r.get("kv", "")),
             str(r.get("host_label") or "unknown"),
             _fmt(r.get("needle.score_mean"), r.get("needle.score_mean.n")),
+            _fmt(r.get("needle.answer_rate"), r.get("needle.answer_rate.n")),
             _fmt(r.get("coding.pass@1"), r.get("coding.pass@1.n")),
             _fmt(r.get("speed.prefill_tps"), r.get("speed.prefill_tps.n")),
             _fmt(r.get("speed.decode_tps"), r.get("speed.decode_tps.n")),

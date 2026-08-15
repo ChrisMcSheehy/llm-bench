@@ -159,12 +159,12 @@ class SpeedEvaluator(Evaluator):
     def aggregate(self, samples: list[Sample]) -> list[Metric]:
         """Median per scenario, and nothing at all where the server stayed silent.
 
-        Deliberately does not call `super()`: the default aggregator's `tok_per_sec_mean`
-        is the blended wall-clock figure this module exists to replace, and emitting it
-        here would put the wrong number back beside the right ones. The failure counts it
-        also provides are reproduced below, because every evaluator owes those.
+        Calls `super()` for the failure counts and the answer rate, which every evaluator
+        owes. It could not until the blended `tok_per_sec_mean` was removed from the
+        default aggregator — emitting that here would have put the wrong speed back
+        beside the right ones, which is the whole point of this module.
         """
-        metrics: list[Metric] = []
+        metrics: list[Metric] = super().aggregate(samples)
         measured = [s for s in samples if s.error is None and s.skipped is None]
         by_scenario = {s.name: s for s in _SCENARIOS}
 
@@ -194,13 +194,6 @@ class SpeedEvaluator(Evaluator):
         # constants above are the answer to "speed at what?".
         metrics.extend(self._headline(metrics, "decode_tps", _HEADLINE_DECODE))
         metrics.extend(self._headline(metrics, "prefill_tps", _HEADLINE_PREFILL))
-
-        metrics.append(Metric(evaluator=self.name, name="error_count",
-                              value=float(sum(1 for s in samples if s.error is not None)),
-                              n=len(samples)))
-        metrics.append(Metric(evaluator=self.name, name="skipped_count",
-                              value=float(sum(1 for s in samples if s.skipped is not None)),
-                              n=len(samples)))
         return metrics
 
     def _headline(self, metrics: list[Metric], name: str, scenario: str) -> list[Metric]:
