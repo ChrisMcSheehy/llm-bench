@@ -28,6 +28,12 @@ OpenRouter), and it will:
    - `long_context` — RULER/MRCR-style multi-key retrieval (with distractors)
      and variable-tracking chains across the same ladder.
 
+   *Speed (two figures, because it is two operations):*
+   - `speed` — reading the prompt and writing the answer, measured separately at
+     stated prompt sizes (~64 / 512 / 2k / 4k / 8k). One warm-up discarded, three
+     timed trials, reported as medians. Figures come from the server's own
+     timings; a backend that reports none gets a dash rather than a guess.
+
    *Code & fidelity:*
    - `coding` — generates solutions to pre-solved problems, grades against
      held-out unit tests (`pass@k`).
@@ -99,6 +105,29 @@ figures exactly (1088 MiB for a two-slot split cache, 1568 MiB for a unified one
 > one, a multi-slot server or a sliding-window model reports **unknown** rather than a
 > figure that could be wrong by the slot count. See
 > `docs/ironclad/PROBE-2026-08-04-host-facts.md`.
+
+### Why speed is two numbers
+
+A model server does two different jobs. It **reads** your prompt — one pass over
+every token, limited by how fast the machine computes — and then it **writes** the
+answer one token at a time, limited by how fast it moves the weights through
+memory. Different bottlenecks, different responses to the same setting.
+
+This bench used to publish a single blend of the two: output tokens divided by
+total wall-clock time, averaged across every rung of a context ladder. So the
+headline "speed" moved mostly with the prompt size it never mentioned, and two
+configurations differing only in context length looked like different models.
+
+`speed` reports `prefill` and `decode` separately, and the leaderboard has a
+column for each. Prompt sizes are approximate — prompts are padded using a ratio
+measured once — so what gets recorded is the token count the **server** reported,
+not the one that was asked for. Prefill scenarios generate exactly one token and
+publish no decode figure at all: timing a process that has barely started is noise
+wearing a number's clothes.
+
+The old blended figure is gone rather than kept alongside. Two speed numbers where
+one is known to be wrong is worse than one correct pair, because the wrong one is
+the one already pasted into every existing table.
 
 ### Which machine a result came from
 
@@ -562,7 +591,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 312 automated checks across 44 files. Almost every one of them
+`llmbench` has 325 automated checks across 45 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 

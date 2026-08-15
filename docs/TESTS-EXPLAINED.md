@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **44 test files, 312 checks, all passing** — verified 2026-08-15, 75
+Current state: **45 test files, 325 checks, all passing** — verified 2026-08-15, 75
 seconds.
 
 ---
@@ -147,7 +147,42 @@ seen. Otherwise you could type your way into a fake distinction between two setu
 
 # Group 2 — "Is this number honest?"
 
-### `test_aggregation.py` (8 checks) — a question never asked isn't a question failed
+### `test_speed.py` (10 checks) — one number that was two numbers in a trenchcoat
+
+**The bug, and it had been published all along.** A model server does two different jobs:
+it **reads** your question — all of it at once, as fast as the machine can calculate — and
+then it **writes** the answer one word at a time, as fast as it can shuffle the model
+through memory. These are different speeds with different limits.
+
+The bench published one number for both: how many words it wrote, divided by the total
+time including reading. Then it averaged that across questions of wildly different
+lengths. The result moved mostly according to how long the questions were — the one thing
+the number never told you. Two identical setups, tested with different question lengths,
+looked like different models.
+
+The correct figures were already being sent back by the server in every reply. Nothing
+read them.
+
+These checks cover the replacement:
+
+- A scenario that asks for a **single word** back publishes no writing speed. Timing
+  something that has barely begun is noise, and printing it next to a real figure invites
+  it to be read as one.
+- Three timed runs are combined with a **median, not an average**, so one unlucky run —
+  a background process, the machine briefly busy — cannot drag the headline. The test uses
+  a run that would move a mean from 50 to 34.
+- A **warm-up run happens and is thrown away**, because the first attempt measures a cold
+  start rather than the setup. One check proves it really ran; another proves it wasn't
+  counted.
+- A server that doesn't report its own timings gets **no figure at all** rather than the
+  old blended one under a better name.
+- A prompt bigger than the model's context is **skipped with a reason**, not attempted and
+  scored zero.
+- And the one that matters most: these speed figures are **kept out of the list of things
+  that may be pooled across machines**. Speed is a fact about a computer. Pooling would
+  average a laptop with a desktop and present the result as a property of the model.
+
+### `test_aggregation.py` (9 checks) — a question never asked isn't a question failed
 
 When a machine can't handle the biggest test, that test is **skipped**. A skip is neither
 a pass nor a fail; it's an absence.
@@ -156,6 +191,9 @@ These prove a skipped item is left out of the average entirely, counted separate
 genuine errors, and never quietly read as a zero. There's also a check for the edge case
 where a test module graded *nothing at all* — the counts must still make sense rather
 than crashing or reporting a hopeful zero.
+
+Two more guard the blended speed figure described above from coming back: it is easy to
+re-add, it looks useful, and it is the wrong number.
 
 ### `test_metric_n.py` and `test_metric_counts.py` (3 + 3) — every number carries its receipts
 

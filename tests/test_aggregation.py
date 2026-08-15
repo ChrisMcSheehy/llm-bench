@@ -97,7 +97,28 @@ def test_a_count_of_failures_rests_on_every_sample_including_the_failures():
     assert metrics["skipped_count"].n == 5
 
 
-def test_the_throughput_mean_counts_only_the_samples_that_reported_a_speed():
-    slow = Sample(evaluator="t", case_id="g", score=1.0, passed=True, tok_per_sec=40.0)
-    metrics = {m.name: m for m in _Eval().aggregate([slow, _graded(1.0)])}
-    assert metrics["tok_per_sec_mean"].n == 1, "the sample with no speed was counted"
+def test_the_default_aggregator_publishes_no_throughput_figure():
+    """It used to publish `tok_per_sec_mean`, and that figure was wrong by construction
+    (design B3).
+
+    `tok_per_sec` is output tokens over *total* wall time, so it includes reading the
+    prompt. Averaging it across a context ladder then produced a headline "generation
+    speed" whose value was dominated by the prompt size it never mentioned — two
+    configurations differing only in context length looked like different models.
+
+    Reading and writing are measured separately, at stated prompt sizes, by the `speed`
+    evaluator. This is here so the blended figure cannot quietly return: it is easy to
+    re-add, it looks useful, and it is the wrong number.
+    """
+    fast = Sample(evaluator="t", case_id="g", score=1.0, passed=True, tok_per_sec=40.0)
+    metrics = {m.name: m for m in _Eval().aggregate([fast, _graded(1.0)])}
+
+    assert "tok_per_sec_mean" not in metrics, (
+        "the blended wall-clock throughput figure is back in the default aggregator")
+
+
+def test_the_raw_speed_is_still_recorded_on_the_sample():
+    """Only the aggregate went. The per-sample number stays, because it is the
+    cross-check the `speed` evaluator reports its own figures against."""
+    fast = Sample(evaluator="t", case_id="g", score=1.0, passed=True, tok_per_sec=40.0)
+    assert fast.tok_per_sec == 40.0

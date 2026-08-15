@@ -34,7 +34,7 @@ def _record(store: Store, run_id: str, host, speed: float, quality: float = 0.9)
     host_hash = store.upsert_host(host) if host is not None else None
     store.start_run(run, host_hash=host_hash)
     store.add_metrics(run_id, [
-        Metric(evaluator="needle", name="tok_per_sec_mean", value=speed, unit="tok/s"),
+        Metric(evaluator="speed", name="decode_tps", value=speed, unit="tok/s"),
         Metric(evaluator="needle", name="score_mean", value=quality),
     ])
 
@@ -64,7 +64,7 @@ def test_speed_stays_one_figure_per_machine(tmp_path):
     rows = store.pooled_speed()
     store.close()
 
-    speeds = sorted(r["value"] for r in rows if r["name"] == "tok_per_sec_mean")
+    speeds = sorted(r["value"] for r in rows if r["name"] == "decode_tps")
     assert speeds == [30.0, 120.0], f"speed was pooled across machines: {speeds}"
     assert len({r["host_hash"] for r in rows}) == 2
 
@@ -77,7 +77,7 @@ def test_a_run_with_no_machine_never_pools_with_one_that_has_it(tmp_path):
     rows = store.pooled_speed()
     store.close()
 
-    speed_rows = [r for r in rows if r["name"] == "tok_per_sec_mean"]
+    speed_rows = [r for r in rows if r["name"] == "decode_tps"]
     assert len(speed_rows) == 2, "a known and an unknown machine were pooled"
     assert any(r["host_hash"] is None for r in speed_rows)
 

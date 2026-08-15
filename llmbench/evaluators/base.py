@@ -172,11 +172,12 @@ class Evaluator(abc.ABC):
             metrics.append(Metric(evaluator=self.name, name="pass_rate",
                                   value=round(sum(passes) / len(passes), 4),
                                   n=len(passes)))
-        tps = [s.tok_per_sec for s in graded if s.tok_per_sec]
-        if tps:
-            metrics.append(Metric(evaluator=self.name, name="tok_per_sec_mean",
-                                  value=round(statistics.mean(tps), 2), unit="tok/s",
-                                  n=len(tps)))
+        # No throughput figure here, deliberately (design B3). `tok_per_sec` is output
+        # tokens over *total* wall time, so it includes reading the prompt - and a mean of
+        # it across a context ladder is dominated by the prompt size it does not mention.
+        # Every sample still carries the raw number for forensics; what is gone is the
+        # aggregate that read like a generation speed and was not one. The `speed`
+        # evaluator measures reading and writing separately, at stated prompt sizes.
 
         # Reported unconditionally, including when nothing was graded. The old early
         # return meant an evaluator whose every sample failed produced no metrics at

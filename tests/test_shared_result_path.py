@@ -67,6 +67,7 @@ _CONFIGS = {
     "coding": {"execute": False},
     "human": {"limit": 1},
     "oneshot": {"limit": 1},
+    "speed": {"scenarios": ["decode"], "trials": 1, "warmup": False},
 }
 
 

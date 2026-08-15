@@ -116,13 +116,13 @@ def test_the_pooled_endpoint_separates_quality_from_speed(tmp_path, monkeypatch)
                       started_at=datetime.now(timezone.utc)),
             host_hash=store.upsert_host(host))
         store.add_metrics(run_id, [
-            Metric(evaluator="needle", name="tok_per_sec_mean", value=speed),
+            Metric(evaluator="speed", name="decode_tps", value=speed),
             Metric(evaluator="needle", name="score_mean", value=0.9)])
     store.close()
 
     body = TestClient(app).get("/api/pooled").json()
     quality = [q for q in body["quality"] if q["name"] == "score_mean"]
-    speed = [s for s in body["speed"] if s["name"] == "tok_per_sec_mean"]
+    speed = [s for s in body["speed"] if s["name"] == "decode_tps"]
     assert len(quality) == 1, "quality should pool to one row per configuration"
     assert len(speed) == 2, "speed was pooled across two machines"
     assert sorted(round(s["value"]) for s in speed) == [30, 120]

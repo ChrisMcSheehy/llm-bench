@@ -17,6 +17,7 @@ import re
 from typing import Any
 
 from llmbench.evaluators._ladder import climb, context_ladder
+from llmbench.evaluators._sizing import chars_per_token
 from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
@@ -105,8 +106,7 @@ class NeedleEvaluator(Evaluator):
         block = " ".join(
             t.format(c="Brindlemoor", w1="amber", w2="cobalt") for t in _FILLER_TEMPLATES
         ) * 8
-        toks = await ctx.count_tokens(block)
-        return len(block) / max(1, toks)
+        return await chars_per_token(ctx, block)
 
     def _build_filler(self, rng: random.Random, char_budget: int) -> str:
         parts, size = [], 0
