@@ -490,6 +490,29 @@ knowing, and all three exist so that a module is grading logic and nothing else:
 - **`load_jsonl` reads question files**, resolving "the bundled set" versus "the one
   the suite configured", and naming the file and line number when a line is malformed.
 
+### Shipping a test module as its own package
+
+You do not have to fork this project to extend it. Publish a package that declares
+one entry point, and an `llmbench` that has it installed discovers it like a
+built-in:
+
+```toml
+# in your own pyproject.toml
+[project.entry-points."llmbench.evaluators"]
+mytest = "llmbench_mytest"
+```
+
+Point it at the module or at the class inside it — either works, because
+importing is what fires `@register`. `llmbench evaluators` will list it.
+
+Two rules worth knowing before you publish. A module reusing a built-in name is
+**rejected**, not silently preferred — two things answering to `needle` would mean
+your suite quietly ran the other one. And a plugin that fails to import **stops
+discovery with an error naming it**, rather than being skipped: a test module that
+is silently absent looks exactly like one that was never installed, and a bench
+running fewer tests than you asked for without saying so is the failure this
+project takes most seriously.
+
 ## Architecture
 
 ```
@@ -539,7 +562,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 309 automated checks across 44 files. Almost every one of them
+`llmbench` has 312 automated checks across 44 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 

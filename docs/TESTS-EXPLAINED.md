@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **44 test files, 309 checks, all passing** — verified 2026-08-15, 75
+Current state: **44 test files, 312 checks, all passing** — verified 2026-08-15, 75
 seconds.
 
 ---
@@ -525,13 +525,29 @@ Worth being clear, and the README is: this is a subprocess with a timeout, **not
 sandbox**. There are no memory or filesystem limits on any platform. Adversarial output
 belongs in a container.
 
-### `test_registry.py` (1 check) — finding all the test modules
+### `test_registry.py` (4 checks) — finding all the test modules
 
 **The bug:** the discovery code treated "the list isn't empty" as proof that discovery had
 already run. So if any code imported a single test module first, that one module made the
 list look complete and the **other ten were never found**.
 
-One test, and it's the exact scenario: import one, then check all eleven appear.
+The first test is that exact scenario: import one, then check all eleven appear.
+
+The other three cover test modules that arrive from **somebody else's package**. You can
+extend this tool by installing an add-on rather than by forking it, so these build a real
+add-on package in a temporary folder, hand it to a freshly started copy of the program,
+and check what it makes of it:
+
+- The add-on's test module shows up alongside the built-in ones.
+- An add-on that **reuses a built-in name** is refused. Two things answering to the same
+  name would mean your suite quietly ran the wrong one.
+- An add-on that is **broken** stops the program with an error naming it, rather than
+  being skipped. A test module that silently isn't there looks exactly like one you never
+  installed — and then the bench runs fewer tests than you asked for without telling you.
+
+They use a genuine package on disk rather than a stand-in, because the thing being tested
+*is* Python's own add-on discovery, and a stand-in would sit on both sides of it without
+ever touching it — a mistake this project has made before and written down.
 
 ### `test_resources.py` (4 checks) — bundled data is always found
 

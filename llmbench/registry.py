@@ -4,11 +4,15 @@ Adding a new test module = drop a file in llmbench/evaluators/ that defines a
 class subclassing Evaluator and decorates it with @register. It is discovered
 automatically; no wiring elsewhere. This is the "microservice-style" seam —
 each module is self-contained and independently registrable.
+
+A test module can also live in a *separate* installed package, which is what makes
+this a tool other people can build on rather than one they have to fork (design E4).
 """
 from __future__ import annotations
 
 import importlib
 import pkgutil
+from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Type
 
 if TYPE_CHECKING:
@@ -33,8 +37,14 @@ def register(cls: Type["Evaluator"]) -> Type["Evaluator"]:
     return cls
 
 
+#: The entry-point group a separately-installed test module declares itself under. The
+#: name is part of the public contract: changing it silently unregisters every plugin
+#: anyone has published.
+ENTRY_POINT_GROUP = "llmbench.evaluators"
+
+
 def discover() -> None:
-    """Import every module under llmbench.evaluators so decorators fire.
+    """Import every test module, built in or installed, so decorators fire.
 
     Safe to call repeatedly: already-imported modules come from the import cache.
     """
@@ -45,7 +55,45 @@ def discover() -> None:
         if mod.name in {"base"}:
             continue
         importlib.import_module(f"llmbench.evaluators.{mod.name}")
+    _load_installed()
     _discovered = True
+
+
+def _load_installed() -> None:
+    """Import test modules published as separate distributions (design E4).
+
+    A publisher declares one line in their own `pyproject.toml`::
+
+        [project.entry-points."llmbench.evaluators"]
+        mytest = "llmbench_mytest"
+
+    Loading is all that is required, because `@register` is what registers - the same
+    single rule the built-in scan relies on. That works whether the entry point names
+    the module or a class inside it, since either import runs the decorator.
+
+    **Built-ins are imported first, deliberately.** A plugin reusing a built-in name
+    still raises the clash from `register`, and doing it in this order makes the message
+    describe the plugin as the newcomer, which is the true account of what happened.
+
+    A plugin that fails to import **stops discovery** rather than being skipped. A
+    quietly absent test module is indistinguishable from one that was never installed,
+    and a bench that silently runs fewer tests than you asked for is the failure this
+    project treats most seriously. The error names the entry point so the culprit is
+    the thing you read first, not something to be worked out.
+
+    This executes third-party code, and deliberately: installing a package already
+    grants that, and nothing here is discovered that the user did not choose to install.
+    """
+    for ep in entry_points(group=ENTRY_POINT_GROUP):
+        try:
+            ep.load()
+        except Exception as exc:
+            raise RuntimeError(
+                f"the installed test module {ep.name!r} (entry point {ep.value!r}) could "
+                f"not be loaded: {exc!r}. Uninstall the package providing it, or fix it - "
+                f"llmbench will not run a suite while a test module it should have is "
+                f"missing."
+            ) from exc
 
 
 def get(name: str) -> Type["Evaluator"]:

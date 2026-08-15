@@ -28,7 +28,7 @@ exists because the same documentation drift shipped twice.
 ## Where to start
 
 If you want to know what the tests do, read [`../TESTS-EXPLAINED.md`](../TESTS-EXPLAINED.md)
-— all 309 of them in plain English.
+— all 312 of them in plain English.
 
 If you want to know why the code is shaped the way it is, read `ARCHITECTURE.md`.
 
