@@ -36,7 +36,29 @@ class LaunchError(RuntimeError):
 
 @dataclass
 class Profile:
-    """One named way to start a model server."""
+    """One named way to start a model server.
+
+    The file is a mapping of name to profile, and one entry looks like this::
+
+        servers:
+          vulkan-b10441:
+            binary: C:/builds/llama-b10441/llama-server.exe
+            model:  C:/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+            args:   ["-ngl", "99", "-c", "65536", "-fa", "on"]
+            port:   8123          # optional; omitted means a free port is chosen
+
+    `binary` and `model` are required and `args` is passed through verbatim, in order,
+    because order is meaningful to llama.cpp and a later flag overrides an earlier one.
+    Everything in `args` becomes part of the run's identity, which is the whole reason
+    this module exists.
+
+    **Every profile spells out its own arguments, and that is deliberate for now.** A
+    profile is the literal command line, so what reaches the fingerprint is a resolved
+    argument list rather than a template that has to be reasoned about. Shared defaults
+    and `{path}` interpolation are designed (`DESIGN-benchmark-coverage.md`, B7) and not
+    built; until they are, a large profile set is better generated than hand-maintained.
+    See the README for a worked set covering the comparisons this bench is for.
+    """
 
     name: str
     binary: str

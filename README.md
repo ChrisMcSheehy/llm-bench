@@ -191,6 +191,70 @@ servers:
     args:   ["-ngl", "99", "-c", "16384", "-ctk", "q8_0", "-ctv", "q8_0"]
 ```
 
+`binary` and `model` are required; `port` is optional and a free one is chosen
+without it. `args` is passed through **verbatim and in order** — order is
+meaningful to llama.cpp, and a later flag beats an earlier one.
+
+### Example profiles, one per comparison
+
+Each pair below changes exactly one thing, because that is what makes two rows
+worth putting side by side. Copy the pair you care about; you do not need them all.
+
+```yaml
+servers:
+  # Two builds, identical everything else — the pull-request case. Each build
+  # reports its own commit, and the binary itself is hashed, so a Vulkan build and
+  # a ROCm build of the same commit stay two rows instead of being averaged.
+  b10441-vulkan:
+    binary: C:/builds/llama-b10441-vulkan/llama-server.exe
+    model:  C:/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    args:   ["-ngl", "99", "-c", "65536", "-fa", "on"]
+  b10441-pr-9912:
+    binary: C:/builds/llama-pr9912-vulkan/llama-server.exe
+    model:  C:/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    args:   ["-ngl", "99", "-c", "65536", "-fa", "on"]
+
+  # Cache compression on and off — what `needle` and `long_context` are for. Pair
+  # this with `llmbench memory` to see what the compression bought in bytes.
+  kv-f16:
+    binary: C:/builds/llama-b10441-vulkan/llama-server.exe
+    model:  C:/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    args:   ["-ngl", "99", "-c", "65536", "-fa", "on"]
+  kv-q8:
+    binary: C:/builds/llama-b10441-vulkan/llama-server.exe
+    model:  C:/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    args:   ["-ngl", "99", "-c", "65536", "-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0"]
+
+  # How much sits on the card. This comparison is *only* possible when llmbench
+  # starts the server — a server you merely connect to reports no `-ngl` at all,
+  # and both runs would be filed as `launch:unreported`.
+  offload-partial:
+    binary: C:/builds/llama-b10441-vulkan/llama-server.exe
+    model:  C:/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    args:   ["-ngl", "24", "-c", "65536", "-fa", "on"]
+
+  # Two quantisations of one model. `UD-` is a dynamic quant, which picks its type
+  # per layer — the bench keeps the prefix, so this is not the same configuration
+  # as a stock Q4_K_M of the same size.
+  q4-stock:
+    binary: C:/builds/llama-b10441-vulkan/llama-server.exe
+    model:  C:/models/Qwen3.6-35B-A3B-Q4_K_M.gguf
+    args:   ["-ngl", "99", "-c", "65536", "-fa", "on"]
+
+  # A long-context profile: bigger window, one slot so the whole cache serves it.
+  long-256k:
+    binary: C:/builds/llama-b10441-vulkan/llama-server.exe
+    model:  C:/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    args:   ["-ngl", "99", "-c", "262144", "-fa", "on", "-np", "1",
+             "-ctk", "q8_0", "-ctv", "q8_0"]
+```
+
+**There is deliberately no shared-defaults mechanism yet**, so every profile
+repeats the flags it has in common. That keeps what reaches the fingerprint a
+resolved argument list rather than a template — but it does mean a large set is
+better generated than hand-maintained. If you keep hundreds of profiles, write
+them from a script rather than by hand until defaults and path interpolation land.
+
 ```bash
 llmbench servers          # what is defined, and what is running
 llmbench launch vulkan-b10148
@@ -294,6 +358,11 @@ evaluators:
 Ollama exposes no tokenizer endpoint, so needle sizing there uses a chars/token
 heuristic (noted on the samples).
 
+The quant is read from the model filename **including a dynamic-quantisation
+prefix**: `UD-Q4_K_M` and `Q4_K_M` are two configurations, not one. They land at
+much the same file size but pick their per-layer types differently, so pooling
+them would average away exactly the comparison you were making.
+
 ## Loading real benchmark data
 
 `mcqa` and `math_qa` ship tiny **original** sample sets so they run with no
@@ -379,29 +448,47 @@ Drop one file in `llmbench/evaluators/`. It's discovered automatically — no
 registration elsewhere:
 
 ```python
-from llmbench.evaluators.base import Evaluator, EvalContext
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
 from llmbench.models import Sample
 from llmbench.registry import register
 
 @register
-class LatencyEval(Evaluator):
-    name = "latency"
+class ShoutEval(Evaluator):
+    name = "shout"
     version = "1"
-    default_config = {"prompts": ["Hello", "Explain TCP in one line."]}
+    default_config = {"prompts": {"greeting": "Say hello.", "network": "Explain TCP."}}
+    breakdowns = [Breakdown("accuracy", ("topic",))]   # one figure per topic
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
-        out = []
-        for i, p in enumerate(ctx.config["prompts"]):
-            r = await ctx.generate([{"role": "user", "content": p}], max_tokens=64)
-            out.append(Sample(evaluator=self.name, case_id=str(i),
-                              latency_ms=r.latency_ms, tok_per_sec=r.tok_per_sec,
-                              score=1.0))
-        return out
+        cfg = self.resolve_config(ctx.config)
+
+        def grade(res) -> Verdict:            # the only part only you can write
+            ok = res.text.strip().isupper()
+            return Verdict(score=1.0 if ok else 0.0, passed=ok,
+                           meta={"answer": res.text[:120]})
+
+        return [await self.run_case(
+                    ctx, case_id=topic, group=topic, dims={"topic": topic},
+                    messages=[{"role": "user", "content": f"{p} Reply in capitals."}],
+                    grade=grade, max_tokens=64)
+                for topic, p in cfg["prompts"].items()]
 ```
 
-Reference it in a suite under `evaluators:` and it runs. The default
-`aggregate()` gives you mean score / pass-rate / throughput; override it for
-bespoke metrics (see `needle.py`'s heatmap aggregation).
+Reference it in a suite under `evaluators:` and it runs. Three things are worth
+knowing, and all three exist so that a module is grading logic and nothing else:
+
+- **`run_case` does the call and the record.** A failed call becomes a sample
+  carrying the error; a response that never reached an answer becomes a *skipped*
+  sample carrying the reason, never a score of zero; and all six measurements —
+  tokens in and out, latency, throughput, and the server's own prefill and decode
+  speeds — are transferred for you. Your grader returns the verdict.
+- **`breakdowns` replaces the group-and-average loop.** Declare the dimensions and
+  the metric name; the default `aggregate()` produces one figure per category, each
+  stating how many items it rests on. Override `aggregate()` only for something
+  genuinely bespoke, and call `super()` when you do — `needle.py`'s effective-context
+  figure is the example.
+- **`load_jsonl` reads question files**, resolving "the bundled set" versus "the one
+  the suite configured", and naming the file and line number when a line is malformed.
 
 ## Architecture
 
@@ -452,7 +539,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 286 automated checks across 43 files. Almost every one of them
+`llmbench` has 309 automated checks across 44 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 

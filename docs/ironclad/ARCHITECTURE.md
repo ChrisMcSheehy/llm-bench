@@ -110,3 +110,34 @@ docs/ironclad/  design docs, plans, lessons
   ran `CREATE TABLE IF NOT EXISTS` only, which does nothing to a database that already
   exists, so no column added after the first release would ever have reached one. New
   columns are declared in `_ADDED_COLUMNS` in `store.py`, never by editing `SCHEMA`.
+- **2026-08-15 — a test module supplies the grading verdict and nothing else.**
+  `Evaluator.run_case` in `evaluators/base.py` makes the model call, turns a failure into
+  an `error` sample and an ungradable response into a `skipped` one, and transfers all six
+  measurements onto the result (design E1). The transfer had been copied into ten places
+  and the copies had drifted: two carried the server's own prefill and decode speeds, one
+  carried a single figure, and eight carried neither — so two modules reported no
+  server-side speed at all. A grading exception is deliberately not caught: recording a
+  defect in our own grading code as `error=` on a sample would file a bench bug as a model
+  result. A grader may be a plain function or a coroutine, because `coding` grades by
+  running pytest in a subprocess and the other nine are pure.
+- **2026-08-15 — per-category figures are declared, not looped.** An evaluator lists
+  `Breakdown(metric, by)` entries and the default aggregator produces one figure per
+  category, each carrying its own `n` (design E2). Five near-identical group-and-average
+  loops are gone. Each breakdown rests on `score`, which every module that wants one sets
+  on every sample it grades. The metric name is part of the declaration rather than
+  generated, because `store.py`'s `QUALITY_METRICS` reads those names to decide what may
+  be pooled across machines. `coding` keeps its own loop: its buckets already exist for
+  `pass@k`, and deriving the same figures twice by two rules would let them disagree.
+- **2026-08-15 — the quantisation scheme is part of the quant label.** `parse_quant` keeps
+  an Unsloth `UD-` prefix instead of matching the plain token inside the longer name, so
+  `UD-Q4_K_M` and `Q4_K_M` are two configurations rather than one. They are the same
+  nominal size and different programs — Dynamic quants choose the type per layer. Kept in
+  the existing `quant` string rather than given a field of its own: it is the label the
+  files actually ship under, and a new field would mean a store migration to record
+  something the string already says. This changes the hash of any future detection of a
+  `UD-` model; stored rows keep theirs, as with `binary_sha`.
+- **2026-08-15 — question files load through `resources.load_jsonl`.** Reading sits beside
+  `resolve_data_file` rather than in the evaluators package (design E5), because that
+  module is already the only place that knows where bundled data lives, and a module
+  author should not have to find two files to read one. It names the file and the line
+  when a line does not parse — four hand-written copies raised an error naming neither.
