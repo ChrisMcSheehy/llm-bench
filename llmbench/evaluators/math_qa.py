@@ -10,13 +10,11 @@ JSONL item schema:
 """
 from __future__ import annotations
 
-import json
-
 from llmbench.evaluators._extract import extract_final_number, numbers_equal
-from llmbench.evaluators.base import EvalContext, Evaluator
-from llmbench.models import Metric, Sample
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.models import Sample
 from llmbench.registry import register
-from llmbench.resources import resolve_data_file
+from llmbench.resources import load_jsonl
 
 _DEFAULTS = {
     "data_file": None,          # None = the bundled sample set
@@ -32,47 +30,27 @@ class MathEvaluator(Evaluator):
     name = "math_qa"
     version = "1"
     default_config = _DEFAULTS
+    breakdowns = [Breakdown("accuracy", ("type",))]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)
-        p = resolve_data_file(cfg["data_file"], "datasets", "math.jsonl")
-        items = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines()
-                 if l.strip()]
-        if cfg["limit"]:
-            items = items[: cfg["limit"]]
+        items = load_jsonl(cfg["data_file"], "datasets", "math.jsonl", limit=cfg["limit"])
         return [await self._one(ctx, cfg, it) for it in items]
 
     async def _one(self, ctx, cfg, it) -> Sample:
         suffix = ("\n\nReason step by step, then give the final answer as "
                   "\\boxed{answer}." if cfg["cot"] else
                   "\n\nReply with only the final number.")
-        dims = {"type": it.get("type", "math")}
-        try:
-            res = await ctx.generate(
-                [{"role": "user", "content": it["question"] + suffix}],
-                max_tokens=cfg["max_tokens"], temperature=cfg["temperature"])
-        except Exception as e:
-            return Sample(evaluator=self.name, case_id=str(it["id"]), group=dims["type"],
-                          dims=dims, error=repr(e))
-        if res.unusable_reason:
-            return Sample(evaluator=self.name, case_id=str(it["id"]), group=dims["type"],
-                          dims=dims, skipped=res.unusable_reason)
-        pred = extract_final_number(res.text)
-        ok = numbers_equal(pred, str(it["answer"]))
-        return Sample(evaluator=self.name, case_id=str(it["id"]), group=dims["type"],
-                      dims=dims, score=1.0 if ok else 0.0, passed=ok,
-                      input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-                      latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-                      meta={"pred": pred, "gold": str(it["answer"]), "answer": res.text[-160:]})
+        kind = it.get("type", "math")
 
-    def aggregate(self, samples: list[Sample]) -> list[Metric]:
-        metrics = super().aggregate(samples)
-        graded = [s for s in samples if s.error is None and s.passed is not None]
-        by_t: dict[str, list[bool]] = {}
-        for s in graded:
-            by_t.setdefault(s.dims.get("type", "math"), []).append(bool(s.passed))
-        for t, v in sorted(by_t.items()):
-            metrics.append(Metric(evaluator=self.name, name="accuracy",
-                                  value=round(sum(v) / len(v), 4), n=len(v),
-                                  dims={"type": t}))
-        return metrics
+        def grade(res) -> Verdict:
+            pred = extract_final_number(res.text)
+            ok = numbers_equal(pred, str(it["answer"]))
+            return Verdict(score=1.0 if ok else 0.0, passed=ok,
+                           meta={"pred": pred, "gold": str(it["answer"]),
+                                 "answer": res.text[-160:]})
+
+        return await self.run_case(
+            ctx, case_id=str(it["id"]), group=kind, dims={"type": kind},
+            messages=[{"role": "user", "content": it["question"] + suffix}], grade=grade,
+            max_tokens=cfg["max_tokens"], temperature=cfg["temperature"])

@@ -14,12 +14,10 @@ natural voice, not greedy output.
 """
 from __future__ import annotations
 
-import json
-
-from llmbench.evaluators.base import EvalContext, Evaluator
+from llmbench.evaluators.base import EvalContext, Evaluator, Verdict
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
-from llmbench.resources import resolve_data_file
+from llmbench.resources import load_jsonl
 
 _DEFAULTS = {
     "data_file": None,          # None = the bundled arena prompts
@@ -37,37 +35,25 @@ class HumanEvalEvaluator(Evaluator):
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)
-        p = resolve_data_file(cfg["data_file"], "datasets", "arena_prompts.jsonl")
-        items = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines()
-                 if l.strip()]
-        if cfg["limit"]:
-            items = items[: cfg["limit"]]
+        items = load_jsonl(cfg["data_file"], "datasets", "arena_prompts.jsonl",
+                           limit=cfg["limit"])
 
         out: list[Sample] = []
         for it in items:
             cat = it.get("category", "general")
-            try:
-                res = await ctx.generate([{"role": "user", "content": it["prompt"]}],
-                                         max_tokens=cfg["max_tokens"],
-                                         temperature=cfg["temperature"])
-            except Exception as e:
-                out.append(Sample(evaluator=self.name, case_id=it["id"], group=cat,
-                                  dims={"category": cat, "prompt_id": it["id"]},
-                                  error=repr(e)))
-                continue
-            if res.unusable_reason:
-                out.append(Sample(evaluator=self.name, case_id=it["id"], group=cat,
-                                  dims={"category": cat, "prompt_id": it["id"]},
-                                  skipped=res.unusable_reason))
-                continue
-            # score stays None — this is for human rating, not auto-grading.
-            out.append(Sample(
-                evaluator=self.name, case_id=it["id"], group=cat,
+
+            # The verdict carries no score and no pass: this module stores a response for
+            # a person to judge, and a heuristic standing in for that judgement is exactly
+            # what it exists to avoid.
+            def grade(res, it=it, cat=cat) -> Verdict:
+                return Verdict(meta={"prompt_id": it["id"], "prompt": it["prompt"],
+                                     "category": cat, "response": res.text})
+
+            out.append(await self.run_case(
+                ctx, case_id=it["id"], group=cat,
                 dims={"category": cat, "prompt_id": it["id"]},
-                input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-                latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-                meta={"prompt_id": it["id"], "prompt": it["prompt"],
-                      "category": cat, "response": res.text}))
+                messages=[{"role": "user", "content": it["prompt"]}], grade=grade,
+                max_tokens=cfg["max_tokens"], temperature=cfg["temperature"]))
         return out
 
     def aggregate(self, samples: list[Sample]) -> list[Metric]:

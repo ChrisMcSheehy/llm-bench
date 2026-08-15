@@ -11,9 +11,10 @@ than one that crashes, because the output still looks valid.
 """
 from __future__ import annotations
 
+import json
 from importlib.resources import files
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 # ironclad: importlib.resources over __file__ arithmetic — rejected Path(__file__).parent:
 # the stdlib call is the supported way to reach package data and does not silently break
@@ -47,3 +48,33 @@ def resolve_data_file(configured: Optional[str], *default_parts: str) -> Path:
             )
         return chosen
     return data_path(*default_parts)
+
+
+def load_jsonl(configured: Optional[str], *default_parts: str,
+               limit: Optional[int] = None) -> list[dict[str, Any]]:
+    """Read a question file: one JSON object per line, blank lines ignored (design E5).
+
+    Four evaluators carried their own copy of this, which meant four places for a
+    malformed file to raise `Expecting value: line 1 column 1` naming neither the file
+    nor which line was wrong - and a question file is exactly the thing a user edits by
+    hand. The error below names both.
+
+    Reading lives here beside `resolve_data_file` on purpose. This module is already the
+    only place that knows where bundled data is, and splitting "which file" from "read
+    that file" across two modules would make a new test module's author find both.
+    """
+    path = resolve_data_file(configured, *default_parts)
+    items: list[dict[str, Any]] = []
+    # enumerate from 1: line numbers in every editor and every other error message in
+    # this project are 1-based, and an off-by-one here sends the reader to the wrong row.
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            items.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"{path}: line {lineno} is not valid JSON ({exc.msg}). Each line must be "
+                f"one complete JSON object; a question file is not a single JSON array."
+            ) from exc
+    return items[:limit] if limit else items

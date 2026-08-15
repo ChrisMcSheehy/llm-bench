@@ -21,9 +21,9 @@ import re
 from typing import Any
 
 from llmbench.evaluators._extract import extract_final_number, numbers_equal
-from llmbench.evaluators.base import EvalContext, Evaluator
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
 from llmbench.evaluators._ladder import climb, context_ladder
-from llmbench.models import Metric, Sample
+from llmbench.models import Sample
 from llmbench.registry import register
 
 _WORDS = ["amber", "quartz", "cobalt", "verdant", "saffron", "cinder", "harbor",
@@ -52,6 +52,9 @@ class LongContextEvaluator(Evaluator):
     name = "long_context"
     version = "1"
     default_config = _DEFAULTS
+    # Recall per (task, rung): the two sub-tasks degrade at different distances, and one
+    # figure covering both would hide which of them broke.
+    breakdowns = [Breakdown("recall", ("task", "context_len"))]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)
@@ -108,22 +111,16 @@ class LongContextEvaluator(Evaluator):
         body = self._weave(rng, char_budget, inserts)
         prompt = (f"{body}\n\nQuestion: what is the code for {target}? "
                   f"Reply with only the code.")
-        dims = {"context_len": length, "task": "multikey"}
-        try:
-            res = await ctx.generate([{"role": "user", "content": prompt}],
-                                     max_tokens=cfg["answer_tokens"], temperature=0.0)
-        except Exception as e:
-            return Sample(evaluator=self.name, case_id=f"mk:{length}:{qi}",
-                          group="multikey", dims=dims, error=repr(e))
-        if res.unusable_reason:
-            return Sample(evaluator=self.name, case_id=f"mk:{length}:{qi}",
-                          group="multikey", dims=dims, skipped=res.unusable_reason)
-        ok = codes[target].lower() in re.sub(r"\s+", " ", res.text).lower()
-        return Sample(evaluator=self.name, case_id=f"mk:{length}:{qi}", group="multikey",
-                      dims=dims, score=1.0 if ok else 0.0, passed=ok,
-                      input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-                      latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-                      meta={"gold": codes[target], "answer": res.text[:120]})
+        def grade(res) -> Verdict:
+            ok = codes[target].lower() in re.sub(r"\s+", " ", res.text).lower()
+            return Verdict(score=1.0 if ok else 0.0, passed=ok,
+                           meta={"gold": codes[target], "answer": res.text[:120]})
+
+        return await self.run_case(
+            ctx, case_id=f"mk:{length}:{qi}", group="multikey",
+            dims={"context_len": length, "task": "multikey"},
+            messages=[{"role": "user", "content": prompt}], grade=grade,
+            max_tokens=cfg["answer_tokens"], temperature=0.0)
 
     async def _vartrack(self, ctx, cfg, rng, length, char_budget, qi) -> Sample:
         start = rng.randint(10000, 99999)
@@ -136,33 +133,13 @@ class LongContextEvaluator(Evaluator):
         body = self._weave(rng, char_budget, inserts)
         prompt = (f"{body}\n\nThe variables are chained by equality. "
                   f"What is the numeric value of {names[-1]}? Reply with only the number.")
-        dims = {"context_len": length, "task": "vartrack"}
-        try:
-            res = await ctx.generate([{"role": "user", "content": prompt}],
-                                     max_tokens=cfg["answer_tokens"], temperature=0.0)
-        except Exception as e:
-            return Sample(evaluator=self.name, case_id=f"vt:{length}:{qi}",
-                          group="vartrack", dims=dims, error=repr(e))
-        if res.unusable_reason:
-            return Sample(evaluator=self.name, case_id=f"vt:{length}:{qi}",
-                          group="vartrack", dims=dims, skipped=res.unusable_reason)
-        ok = numbers_equal(extract_final_number(res.text), str(start))
-        return Sample(evaluator=self.name, case_id=f"vt:{length}:{qi}", group="vartrack",
-                      dims=dims, score=1.0 if ok else 0.0, passed=ok,
-                      input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-                      latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-                      meta={"gold": start, "answer": res.text[:120]})
+        def grade(res) -> Verdict:
+            ok = numbers_equal(extract_final_number(res.text), str(start))
+            return Verdict(score=1.0 if ok else 0.0, passed=ok,
+                           meta={"gold": start, "answer": res.text[:120]})
 
-    def aggregate(self, samples: list[Sample]) -> list[Metric]:
-        metrics = super().aggregate(samples)
-        graded = [s for s in samples if s.error is None and s.score is not None]
-        # recall per (task, context_len) for a heatmap-style breakdown
-        buckets: dict[tuple[str, int], list[float]] = {}
-        for s in graded:
-            key = (s.dims["task"], s.dims["context_len"])
-            buckets.setdefault(key, []).append(s.score)
-        for (task, length), sc in sorted(buckets.items()):
-            metrics.append(Metric(evaluator=self.name, name="recall",
-                                  value=round(sum(sc) / len(sc), 4), n=len(sc),
-                                  dims={"task": task, "context_len": length}))
-        return metrics
+        return await self.run_case(
+            ctx, case_id=f"vt:{length}:{qi}", group="vartrack",
+            dims={"context_len": length, "task": "vartrack"},
+            messages=[{"role": "user", "content": prompt}], grade=grade,
+            max_tokens=cfg["answer_tokens"], temperature=0.0)

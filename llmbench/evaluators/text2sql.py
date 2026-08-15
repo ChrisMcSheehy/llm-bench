@@ -15,7 +15,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from llmbench.evaluators.base import EvalContext, Evaluator
+from llmbench.evaluators.base import EvalContext, Evaluator, Verdict
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
 
@@ -86,25 +86,18 @@ class Text2SQLEvaluator(Evaluator):
         prompt = (f"Given this SQLite schema:\n{_SCHEMA}\n"
                   f"Write a single SQL SELECT query to answer: {question}\n"
                   f"Output only the SQL.")
-        try:
-            res = await ctx.generate([{"role": "user", "content": prompt}],
-                                     max_tokens=cfg["max_tokens"], temperature=cfg["temperature"])
-        except Exception as e:
-            return Sample(evaluator=self.name, case_id=tid, group=tid, error=repr(e))
+        def grade(res) -> Verdict:
+            pred_sql = _extract_sql(res.text)
+            gold_rows, _ = self._run(conn, gold)
+            pred_rows, err = self._run(conn, pred_sql)
+            ok = err is None and gold_rows is not None and self._match(gold_rows, pred_rows)
+            return Verdict(score=1.0 if ok else 0.0, passed=ok,
+                           meta={"sql": pred_sql[:300], "error": err})
 
-        if res.unusable_reason:
-            return Sample(evaluator=self.name, case_id=tid, group=tid,
-                          skipped=res.unusable_reason)
-
-        pred_sql = _extract_sql(res.text)
-        gold_rows, _ = self._run(conn, gold)
-        pred_rows, err = self._run(conn, pred_sql)
-        ok = err is None and gold_rows is not None and self._match(gold_rows, pred_rows)
-        return Sample(evaluator=self.name, case_id=tid, group=tid,
-                      score=1.0 if ok else 0.0, passed=ok,
-                      input_tokens=res.input_tokens, output_tokens=res.output_tokens,
-                      latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
-                      meta={"sql": pred_sql[:300], "error": err})
+        return await self.run_case(
+            ctx, case_id=tid, group=tid,
+            messages=[{"role": "user", "content": prompt}], grade=grade,
+            max_tokens=cfg["max_tokens"], temperature=cfg["temperature"])
 
     def _run(self, conn, sql):
         if not re.match(r"^\s*SELECT\b", sql, re.I):
