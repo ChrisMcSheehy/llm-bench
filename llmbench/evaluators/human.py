@@ -57,14 +57,19 @@ class HumanEvalEvaluator(Evaluator):
         return out
 
     def aggregate(self, samples: list[Sample]) -> list[Metric]:
+        """How many responses there are to rate, on top of the shared figures.
+
+        Nothing here is scored, so the default aggregator contributes the failure counts
+        and the answer rate and no quality figure. It is called rather than skipped
+        because a module that opts out of the shared aggregator opts out of everything
+        added to it later — which is how this one came to report no `skipped_count`.
+        """
         # A response that never arrived is not a response to rate, so it is not counted
         # as one - the same distinction the default aggregator draws.
         graded = [s for s in samples if s.error is None and s.skipped is None]
-        return [
-            # "12 responses out of 12 prompts" - the count is the prompts attempted,
-            # which is what makes the figure readable at all.
-            Metric(evaluator=self.name, name="responses", value=float(len(graded)),
-                   n=len(samples)),
-            Metric(evaluator=self.name, name="error_count",
-                   value=float(sum(1 for s in samples if s.error)), n=len(samples)),
-        ]
+        metrics = super().aggregate(samples)
+        # "12 responses out of 12 prompts" - the count is the prompts attempted, which is
+        # what makes the figure readable at all.
+        metrics.append(Metric(evaluator=self.name, name="responses",
+                              value=float(len(graded)), n=len(samples)))
+        return metrics

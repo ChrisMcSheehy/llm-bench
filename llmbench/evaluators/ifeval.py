@@ -111,22 +111,23 @@ class IFEvalEvaluator(Evaluator):
         return out
 
     def aggregate(self, samples: list[Sample]) -> list[Metric]:
-        # Skips excluded as well as errors: a skipped sample carries score None, which
-        # this sum would add to a float. The default aggregator already draws this
-        # distinction; every override has to draw it too.
-        graded = [s for s in samples if s.error is None and s.skipped is None]
-        metrics = []
-        if graded:
-            inst = sum(s.score for s in graded) / len(graded)
-            prompt = sum(1 for s in graded if s.passed) / len(graded)
-            metrics.append(Metric(evaluator=self.name, name="instruction_acc",
-                                  value=round(inst, 4), n=len(graded)))
-            metrics.append(Metric(evaluator=self.name, name="prompt_acc",
-                                  value=round(prompt, 4), n=len(graded)))
-            # score_mean mirrors instruction_acc so the leaderboard picks it up.
-            metrics.append(Metric(evaluator=self.name, name="score_mean",
-                                  value=round(inst, 4), n=len(graded)))
-        metrics.append(Metric(evaluator=self.name, name="error_count",
-                              value=float(sum(1 for s in samples if s.error)),
-                              n=len(samples)))
+        """IFEval's two published figures, which the default aggregator already computes.
+
+        `instruction_acc` is the mean score — the fraction of individual constraints met —
+        and `prompt_acc` is the pass rate, every constraint in a prompt met. They are
+        emitted under IFEval's own names as well, because those are what a reader
+        comparing against published IFEval numbers will look for.
+
+        This used to compute both by hand and skipped `super()`, which meant it silently
+        reported no `skipped_count` and, once it existed, no `answer_rate` — a module that
+        opts out of the shared aggregator opts out of everything added to it later.
+        """
+        metrics = super().aggregate(samples)
+        published = {"instruction_acc": "score_mean", "prompt_acc": "pass_rate"}
+        by_name = {m.name: m for m in metrics}
+        for alias, computed in published.items():
+            source = by_name.get(computed)
+            if source is not None:
+                metrics.append(Metric(evaluator=self.name, name=alias,
+                                      value=source.value, n=source.n))
         return metrics

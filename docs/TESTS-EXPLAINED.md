@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **45 test files, 325 checks, all passing** — verified 2026-08-15, 75
+Current state: **46 test files, 346 checks, all passing** — verified 2026-08-15, 75
 seconds.
 
 ---
@@ -146,6 +146,31 @@ seen. Otherwise you could type your way into a fake distinction between two setu
 ---
 
 # Group 2 — "Is this number honest?"
+
+### `test_answer_rate.py` (21 checks) — "how often it was right" needs "how often it spoke"
+
+Two setups both score 85%. One answered every question; the other quietly declined one in
+five and scored 85% on the rest. **Those are very different setups, and the leaderboard
+showed them as identical rows.**
+
+An earlier fix (see below) stopped a non-answer being marked *wrong*, which was right — but
+it left the non-answers invisible. So now every setup also reports **how much of the test
+it actually attempted**, printed next to the score it qualifies.
+
+The hard part is what counts in the denominator, and most of these checks are about that:
+
+- A question the model was asked and **said nothing to** counts against it.
+- A test the machine **could never run** — a memory limit, a context too large — does
+  **not**. Counting it would report a laptop's honest limit as a model refusing to answer.
+- A **failed connection** doesn't count either. That's a fact about the network.
+- Asked nothing at all, the figure is **absent rather than zero**, because a rate over no
+  questions isn't zero.
+- Every test module that talks to a model reports it, checked one module at a time, with
+  the usual guard that a module added later must be added here too.
+- The figure **pools across machines**, unlike speed: a model that spends its budget
+  thinking and returns nothing does so on any computer.
+- It survives being written to the database, and an older database **gains the column
+  without inventing values** for rows recorded before anyone was tracking this.
 
 ### `test_speed.py` (10 checks) — one number that was two numbers in a trenchcoat
 

@@ -128,6 +128,24 @@ docs/ironclad/  design docs, plans, lessons
   generated, because `store.py`'s `QUALITY_METRICS` reads those names to decide what may
   be pooled across machines. `coding` keeps its own loop: its buckets already exist for
   `pass@k`, and deriving the same figures twice by two rules would let them disagree.
+- **2026-08-15 — how often the model answered is recorded as a fact, not inferred from a
+  string.** `Sample.answered` is True when a gradable response arrived, False when the
+  model was asked and produced nothing usable, and None when it was never successfully
+  asked (design B2). The default aggregator turns it into `answer_rate`, reported beside
+  every accuracy, because an accuracy over an unstated subset is the naked figure D7
+  forbids. A separate field rather than parsing `skipped`: that one string carries two
+  situations a denominator must tell apart — "never attempted" and "attempted, said
+  nothing" — and only the second is a fact about the model. Distinguishing them by the
+  `not attempted:` / `no answer:` prefixes the reasons happen to use would make a display
+  convention load-bearing. `answer_rate` **is** in `QUALITY_METRICS`: a model that spends
+  its budget thinking and returns nothing does so on any machine. Rows written before the
+  column existed are NULL, never backfilled — nobody recorded whether they answered.
+- **2026-08-15 — an evaluator that overrides `aggregate` calls `super()`.** `ifeval`,
+  `human` and `speed` did not, and so silently reported no `skipped_count`, and would have
+  reported no `answer_rate`. A module that opts out of the shared aggregator opts out of
+  everything added to it later. `ifeval` now publishes `instruction_acc` and `prompt_acc`
+  as names for the `score_mean` and `pass_rate` the default aggregator already computes,
+  rather than computing them twice.
 - **2026-08-15 — speed is two measured figures, and the blended one is gone.** The default
   aggregator no longer emits `tok_per_sec_mean` (design B3). It was output tokens over
   *total* wall time, so it included prompt processing, and averaging it across a context
