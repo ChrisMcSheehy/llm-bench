@@ -293,8 +293,11 @@ def runs():
         console.print("No runs yet. Try: llmbench run")
         raise typer.Exit()
     t = Table(title="Runs")
+    # Reading and writing speed are two columns because they are two measurements with
+    # different bottlenecks (design B3). One blended column used to sit here and moved
+    # mostly with the prompt size it never mentioned.
     for col in ("label", "engine", "kv", "machine", "needle.recall", "coding.pass@1",
-                "needle.tok_per_sec_mean"):
+                "speed.prefill", "speed.decode"):
         t.add_column(col)
     for r in board:
         t.add_row(
@@ -302,7 +305,8 @@ def runs():
             str(r.get("host_label") or "unknown"),
             _fmt(r.get("needle.score_mean"), r.get("needle.score_mean.n")),
             _fmt(r.get("coding.pass@1"), r.get("coding.pass@1.n")),
-            _fmt(r.get("needle.tok_per_sec_mean"), r.get("needle.tok_per_sec_mean.n")),
+            _fmt(r.get("speed.prefill_tps"), r.get("speed.prefill_tps.n")),
+            _fmt(r.get("speed.decode_tps"), r.get("speed.decode_tps.n")),
         )
     console.print(t)
     store.close()

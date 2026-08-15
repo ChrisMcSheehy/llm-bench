@@ -128,6 +128,25 @@ docs/ironclad/  design docs, plans, lessons
   generated, because `store.py`'s `QUALITY_METRICS` reads those names to decide what may
   be pooled across machines. `coding` keeps its own loop: its buckets already exist for
   `pass@k`, and deriving the same figures twice by two rules would let them disagree.
+- **2026-08-15 — speed is two measured figures, and the blended one is gone.** The default
+  aggregator no longer emits `tok_per_sec_mean` (design B3). It was output tokens over
+  *total* wall time, so it included prompt processing, and averaging it across a context
+  ladder produced a headline dominated by the variable it hid. `evaluators/speed.py`
+  measures prefill and decode separately at stated prompt sizes, from the server's own
+  `timings` block — figures that were already being captured and read by nothing. A
+  backend that publishes no timings gets **no figure**, never a wall-clock substitute,
+  because the substitute is the blend this decision removes. Kept alongside was rejected:
+  the wrong number is the one already pasted into existing tables. Each evaluator's raw
+  `tok_per_sec` stays on the sample as the cross-check, and `speed` reports it under
+  `wallclock_tps` so it cannot be mistaken for the decode figure. The new metric names are
+  deliberately absent from `store.QUALITY_METRICS`, so they group by host and never pool
+  across machines (design D1).
+- **2026-08-15 — prompt sizing is calibrated once, in one place.**
+  `evaluators/_sizing.py` holds `chars_per_token`, which `needle`, `long_context` and
+  `speed` all use. It was two copies before `speed` needed a third. Sizing by character
+  budget from a ratio measured once is what keeps a million-token rung to a single
+  tokenize call; the resulting size is approximate, and the count that gets recorded is
+  always the server's own.
 - **2026-08-15 — a test module may live in a separately installed package.**
   `registry.discover()` reads the `llmbench.evaluators` entry-point group after scanning
   the built-in folder (design E4), so extending the tool no longer means editing it. The

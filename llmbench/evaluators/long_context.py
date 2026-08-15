@@ -23,6 +23,7 @@ from typing import Any
 from llmbench.evaluators._extract import extract_final_number, numbers_equal
 from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
 from llmbench.evaluators._ladder import climb, context_ladder
+from llmbench.evaluators._sizing import chars_per_token
 from llmbench.models import Sample
 from llmbench.registry import register
 
@@ -84,8 +85,7 @@ class LongContextEvaluator(Evaluator):
                       dims={"context_len": length}, skipped=reason)
 
     async def _cpt(self, ctx: EvalContext) -> float:
-        toks = await ctx.count_tokens(_FILLER * 10)
-        return len(_FILLER * 10) / max(1, toks)
+        return await chars_per_token(ctx, _FILLER * 10)
 
     def _weave(self, rng, char_budget: int, inserts: list[str]) -> str:
         """Spread `inserts` roughly evenly through filler of ~char_budget."""

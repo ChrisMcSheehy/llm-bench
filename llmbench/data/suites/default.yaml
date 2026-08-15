@@ -30,6 +30,12 @@ evaluators:
   long_context:               # RULER/MRCR-style multi-key + variable tracking
     tasks: [multikey, vartrack]
 
+  # --- speed (two figures: reading the prompt, and writing the answer) ---
+  speed:
+    # One warm-up per scenario then three timed trials, reported as medians.
+    # Scenarios larger than the model's context are skipped with a reason.
+    trials: 3
+
   # --- code -------------------------------------------------------------
   coding:
     execute: true

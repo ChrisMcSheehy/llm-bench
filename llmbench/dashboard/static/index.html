@@ -147,9 +147,14 @@ async function loadRun(id,r){
             "","",cnt("needle.effective_ctx"))}
       ${kpi("coding pass@1",pct(val("coding.pass@1")??val("coding.pass_rate")),"warn","",
             cnt("coding.pass@1")??cnt("coding.pass_rate"))}
-      ${kpi("gen speed",val("needle.tok_per_sec_mean")?.toFixed(1)
-            ??val("coding.tok_per_sec_mean")?.toFixed(1)??"—","","tok/s",
-            cnt("needle.tok_per_sec_mean")??cnt("coding.tok_per_sec_mean"))}
+      <!-- Two tiles, not one. Reading the prompt and writing the answer have different
+           bottlenecks; the single tile that used to sit here was output tokens over total
+           wall time, which blended them and then moved with the prompt size it never
+           showed. Both read the `speed` evaluator; a run without it shows a dash. -->
+      ${kpi("prefill",val("speed.prefill_tps")?.toFixed(0)??"—","","tok/s",
+            cnt("speed.prefill_tps"))}
+      ${kpi("decode",val("speed.decode_tps")?.toFixed(1)??"—","","tok/s",
+            cnt("speed.decode_tps"))}
       ${cap.perplexity!=null?kpi("perplexity",cap.perplexity.toFixed(3),"warn","",1):""}
       ${kpi("errors",errors.value||"0","","",errors.n)}
       ${kpi("not attempted",skipped.length||"0","",skipped.length?"rungs":"",skipped.length)}

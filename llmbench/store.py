@@ -298,8 +298,8 @@ class Store:
                FROM run r JOIN fingerprint f ON f.hash=r.fp_hash
                LEFT JOIN host h ON h.hash=r.host_hash
                JOIN metric m ON m.run_id=r.run_id
-               WHERE m.name IN ('score_mean','pass_rate','pass@1','tok_per_sec_mean',
-                                'effective_ctx','error_count','perplexity')
+               WHERE m.name IN ('score_mean','pass_rate','pass@1','decode_tps',
+                                'prefill_tps','effective_ctx','error_count','perplexity')
                  AND json_extract(m.dims_json,'$')='{}'
                ORDER BY r.started_at DESC""")
         board: dict[str, dict] = {}
