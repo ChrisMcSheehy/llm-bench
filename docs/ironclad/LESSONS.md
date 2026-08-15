@@ -249,6 +249,26 @@ code but number-to-meaning, and no test on either side of it could see the misma
   never inherit its absence from the environment.
 - **Scope:** global.
 
+**Recurrence — 2026-08-15, the same lesson from the opposite side.** The first run of the
+three-operating-system matrix after 2026-08-04 turned up
+`test_declared_settings.py::test_a_declared_unified_flag_resolves_a_multi_slot_server`
+failing on **all twelve jobs** while passing locally. It called `_detect` without a model,
+so the fixture's captured `model_path` stood —
+`C:/Users/chris/AppData/Roaming/.../nomic-embed-text-v1.5.Q4_K_M.gguf` — which still exists
+on the capture machine. At home the shape was read and a figure came back; everywhere else
+the shape was unknown and the figure was `None`.
+
+The original enforcement above covers a test that needs a resource **absent**. This one
+needed it **present**, and the wording did not reach it. The rule is therefore widened:
+**a test must construct every resource whose presence or absence decides its verdict** —
+in either direction. Inheriting either state from the machine makes the machine the
+examiner. Fixed by `_dense_model()` in that file, which builds its own model.
+
+Note what made this visible at all: the defect shipped on 2026-08-04 and sat green for
+eleven days because the matrix was not running — see
+[[a-check-that-stops-running-looks-nothing-like-a-check-that-fails]], which is not a
+separate story from this one but the reason this one lasted.
+
 Related: [[observe-the-real-thing-rather-than-assert-something-unfalsifiable]],
 [[pytest-pythonpath-tests-the-working-tree-not-the-wheel]] — all three are a check whose
 verdict is decided by the machine it runs on rather than by the code under test.

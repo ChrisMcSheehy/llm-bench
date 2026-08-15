@@ -45,6 +45,28 @@ def _swa_model(tmp_path) -> str:
     ])
 
 
+def _dense_model(tmp_path) -> str:
+    """A plain model with no sliding window, so only the slot count is in question.
+
+    Built here rather than inherited from the fixture's `model_path`. That path was
+    captured on the author's machine and still resolves there, so a test relying on it
+    reads a real model at home and nothing anywhere else - the same defect recorded in
+    LESSONS.md as a-captured-fixture-carries-paths-that-still-exist-at-home, seen from the
+    other side: that one depended on the file being absent, this one on it being present.
+    Both let the machine decide the verdict.
+    """
+    from tests.test_gguf import _kv, _string, _u32, _write_gguf, STRING, U32
+    return _write_gguf(tmp_path / "dense.gguf", [
+        _kv("general.architecture", STRING, _string("llama")),
+        _kv("llama.block_count", U32, _u32(4)),
+        _kv("llama.attention.head_count", U32, _u32(8)),
+        _kv("llama.attention.head_count_kv", U32, _u32(2)),
+        _kv("llama.attention.key_length", U32, _u32(64)),
+        _kv("llama.attention.value_length", U32, _u32(64)),
+        _kv("llama.embedding_length", U32, _u32(512)),
+    ])
+
+
 def _detect(tmp_path, *, model=None, slots=1, declared=None, n_ctx=1024):
     f = copy.deepcopy(_FIXTURE["plain"])
     if model:
@@ -112,11 +134,12 @@ def test_declaring_does_not_change_the_identity(tmp_path):
 
 def test_a_declared_unified_flag_resolves_a_multi_slot_server(tmp_path):
     """Four slots and no argv is unknown; declaring the cache shape settles it."""
-    unknown = _detect(tmp_path, slots=4)
+    model = _dense_model(tmp_path)
+    unknown = _detect(tmp_path, model=model, slots=4)
     assert unknown.kv_cache_bytes is None
 
-    unified = _detect(tmp_path, slots=4, declared={"kv_unified": True})
-    split = _detect(tmp_path, slots=4, declared={"kv_unified": False})
+    unified = _detect(tmp_path, model=model, slots=4, declared={"kv_unified": True})
+    split = _detect(tmp_path, model=model, slots=4, declared={"kv_unified": False})
     assert unified.kv_cache_bytes is not None
     assert split.kv_cache_bytes == unified.kv_cache_bytes * 4
     assert split.kv_cache_derivation["kv_unified_source"] == "declared"
