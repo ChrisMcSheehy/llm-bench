@@ -1,0 +1,15 @@
+id: humaneval_047
+entrypoint: median
+timeout_s: 15
+source: HumanEval/47
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def median(l: list):
+      """Return median of elements in the list l.
+      >>> median([3, 1, 2, 4, 5])
+      3
+      >>> median([-10, 4, 6, 1000, 10, 20])
+      15.0
+      """

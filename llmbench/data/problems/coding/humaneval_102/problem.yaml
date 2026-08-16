@@ -1,0 +1,9 @@
+id: humaneval_102
+entrypoint: choose_num
+timeout_s: 15
+source: HumanEval/102
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: "\ndef choose_num(x, y):\n    \"\"\"This function takes two positive numbers x and y and returns\
+  \ the\n    biggest even integer number that is in the range [x, y] inclusive. If \n    there's no such\
+  \ number, then the function should return -1.\n\n    For example:\n    choose_num(12, 15) = 14\n   \
+  \ choose_num(13, 12) = -1\n    \"\"\"\n"

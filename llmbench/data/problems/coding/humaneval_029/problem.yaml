@@ -1,0 +1,16 @@
+id: humaneval_029
+entrypoint: filter_by_prefix
+timeout_s: 15
+source: HumanEval/29
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |
+  from typing import List
+
+
+  def filter_by_prefix(strings: List[str], prefix: str) -> List[str]:
+      """ Filter an input list of strings only for ones that start with a given prefix.
+      >>> filter_by_prefix([], 'a')
+      []
+      >>> filter_by_prefix(['abc', 'bcd', 'cde', 'array'], 'a')
+      ['abc', 'array']
+      """

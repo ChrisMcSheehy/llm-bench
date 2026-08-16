@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **47 test files, 379 checks, all passing** — verified 2026-08-15, 75
+Current state: **48 test files, 551 checks, all passing** — verified 2026-08-16, 97
 seconds.
 
 ---
@@ -627,6 +627,25 @@ shipped a feature that could never fire.
 - A module that crashes while *summarising* costs only itself.
 - A machine at its limit still produces a **completed** run. This is the philosophical
   centre of the file: **a machine's honest limit is not a fault.**
+
+### `test_humaneval_problems.py` (172 checks) — the imported problem set is real
+
+The coding test used to have **four** problems, so the score moved in steps of 25% and
+couldn't tell two setups apart. It now also carries **HumanEval** — a standard 164-problem
+set published by OpenAI — converted once into this project's own format and committed, so
+nothing is downloaded when you run it.
+
+That makes the committed files the thing worth checking, because **a badly converted
+problem looks exactly like a model failing to solve it**. So: all 164 are checked for
+being complete and self-consistent (the function named in the description is the one the
+answer defines and the tests import), and a sample is actually executed to prove the tests
+can be passed at all.
+
+Three of the sampled five are there for a specific reason. When the set was first
+converted, **three problems failed** — their tests call a helper function that the question
+describes, not just the main function, and the conversion only imported the main one. All
+164 reference solutions were run through the real harness before anything was committed,
+which is how that was found. Those three are now permanently in the sample.
 
 ### `test_coding_harness.py` (3 checks) — running code the model wrote
 

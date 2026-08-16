@@ -1,0 +1,15 @@
+id: humaneval_030
+entrypoint: get_positive
+timeout_s: 15
+source: HumanEval/30
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def get_positive(l: list):
+      """Return only positive numbers in the list.
+      >>> get_positive([-1, 2, -4, 5, 6])
+      [2, 5, 6]
+      >>> get_positive([5, 3, -5, 2, -3, 3, 9, 0, 123, 1, -10])
+      [5, 3, 2, 3, 9, 123, 1]
+      """

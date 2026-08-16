@@ -105,7 +105,17 @@ jobs:
 
           problems = data_path("problems", "coding")
           names = sorted(p.name for p in problems.iterdir() if p.is_dir())
-          assert names == ["balanced_brackets", "kadane", "rle_encode", "two_sum"], names
+          bespoke = {"balanced_brackets", "kadane", "rle_encode", "two_sum"}
+          converted = [n for n in names if n.startswith("humaneval_")]
+          assert bespoke <= set(names), f"bespoke problems missing from the wheel: {names[:8]}"
+          assert len(converted) == 164, f"packaged {len(converted)} HumanEval problems, expected 164"
+
+          # A problem directory is only useful if all three of its files shipped, and
+          # package-data globs are exactly the kind of thing that silently drops a
+          # subdirectory. Checking one converted problem end to end is enough to catch that.
+          for part in ("problem.yaml", "tests.py", "solution.py"):
+              assert (problems / "humaneval_000" / part).exists(), f"missing {part}"
+          assert (problems / "HUMANEVAL.md").exists(), "the MIT attribution did not ship"
 
           print(f"packaged data OK: {len(names)} coding problems, dataset at {dataset}")
           PY

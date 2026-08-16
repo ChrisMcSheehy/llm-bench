@@ -1,0 +1,13 @@
+id: humaneval_024
+entrypoint: largest_divisor
+timeout_s: 15
+source: HumanEval/24
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def largest_divisor(n: int) -> int:
+      """ For a given number n, find the largest number that divides n evenly, smaller than n
+      >>> largest_divisor(15)
+      5
+      """

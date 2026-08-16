@@ -1,0 +1,20 @@
+id: humaneval_048
+entrypoint: is_palindrome
+timeout_s: 15
+source: HumanEval/48
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def is_palindrome(text: str):
+      """
+      Checks if given string is a palindrome
+      >>> is_palindrome('')
+      True
+      >>> is_palindrome('aba')
+      True
+      >>> is_palindrome('aaaaa')
+      True
+      >>> is_palindrome('zbcd')
+      False
+      """

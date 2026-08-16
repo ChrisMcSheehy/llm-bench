@@ -1,0 +1,19 @@
+id: humaneval_050
+entrypoint: decode_shift
+timeout_s: 15
+source: HumanEval/50
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def encode_shift(s: str):
+      """
+      returns encoded string by shifting every character by 5 in the alphabet.
+      """
+      return "".join([chr(((ord(ch) + 5 - ord("a")) % 26) + ord("a")) for ch in s])
+
+
+  def decode_shift(s: str):
+      """
+      takes as input string encoded with encode_shift function. Returns decoded string.
+      """

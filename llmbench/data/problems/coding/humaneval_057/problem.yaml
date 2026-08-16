@@ -1,0 +1,17 @@
+id: humaneval_057
+entrypoint: monotonic
+timeout_s: 15
+source: HumanEval/57
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def monotonic(l: list):
+      """Return True is list elements are monotonically increasing or decreasing.
+      >>> monotonic([1, 2, 4, 20])
+      True
+      >>> monotonic([1, 20, 4, 10])
+      False
+      >>> monotonic([4, 1, 0, -10])
+      True
+      """

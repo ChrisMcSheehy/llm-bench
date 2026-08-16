@@ -1,0 +1,21 @@
+id: humaneval_056
+entrypoint: correct_bracketing
+timeout_s: 15
+source: HumanEval/56
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def correct_bracketing(brackets: str):
+      """ brackets is a string of "<" and ">".
+      return True if every opening bracket has a corresponding closing bracket.
+
+      >>> correct_bracketing("<")
+      False
+      >>> correct_bracketing("<>")
+      True
+      >>> correct_bracketing("<<><>>")
+      True
+      >>> correct_bracketing("><<>")
+      False
+      """

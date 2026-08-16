@@ -1,0 +1,13 @@
+id: humaneval_027
+entrypoint: flip_case
+timeout_s: 15
+source: HumanEval/27
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def flip_case(string: str) -> str:
+      """ For a given string, flip lowercase characters to uppercase and uppercase to lowercase.
+      >>> flip_case('Hello')
+      'hELLO'
+      """

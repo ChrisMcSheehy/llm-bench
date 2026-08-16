@@ -1,0 +1,15 @@
+id: humaneval_052
+entrypoint: below_threshold
+timeout_s: 15
+source: HumanEval/52
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def below_threshold(l: list, t: int):
+      """Return True if all numbers in the list l are below threshold t.
+      >>> below_threshold([1, 2, 4, 10], 100)
+      True
+      >>> below_threshold([1, 20, 4, 10], 5)
+      False
+      """

@@ -1,0 +1,16 @@
+id: humaneval_082
+entrypoint: prime_length
+timeout_s: 15
+source: HumanEval/82
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+  def prime_length(string):
+      """Write a function that takes a string and returns True if the string
+      length is a prime number or False otherwise
+      Examples
+      prime_length('Hello') == True
+      prime_length('abcdcba') == True
+      prime_length('kittens') == True
+      prime_length('orange') == False
+      """

@@ -1,0 +1,12 @@
+id: humaneval_083
+entrypoint: starts_one_ends
+timeout_s: 15
+source: HumanEval/83
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+  def starts_one_ends(n):
+      """
+      Given a positive integer n, return the count of the numbers of n-digit
+      positive integers that start or end with 1.
+      """

@@ -1,0 +1,14 @@
+id: humaneval_162
+entrypoint: string_to_md5
+timeout_s: 15
+source: HumanEval/162
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+  def string_to_md5(text):
+      """
+      Given a string 'text', return its md5 hash equivalent string.
+      If 'text' is an empty string, return None.
+
+      >>> string_to_md5('Hello world') == '3e25960a79dbc69b674cd4ec67a72c62'
+      """

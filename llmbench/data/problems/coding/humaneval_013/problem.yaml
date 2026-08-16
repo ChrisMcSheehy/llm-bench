@@ -1,0 +1,15 @@
+id: humaneval_013
+entrypoint: greatest_common_divisor
+timeout_s: 15
+source: HumanEval/13
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def greatest_common_divisor(a: int, b: int) -> int:
+      """ Return a greatest common divisor of two integers a and b
+      >>> greatest_common_divisor(3, 5)
+      1
+      >>> greatest_common_divisor(25, 15)
+      5
+      """

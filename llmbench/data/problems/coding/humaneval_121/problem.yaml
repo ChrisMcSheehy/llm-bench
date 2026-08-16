@@ -1,0 +1,8 @@
+id: humaneval_121
+entrypoint: solution
+timeout_s: 15
+source: HumanEval/121
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: "\ndef solution(lst):\n    \"\"\"Given a non-empty list of integers, return the sum of all of\
+  \ the odd elements that are in even positions.\n    \n\n    Examples\n    solution([5, 8, 7, 1]) ==>\
+  \ 12\n    solution([3, 3, 3, 3, 3]) ==> 9\n    solution([30, 13, 24, 321]) ==>0\n    \"\"\"\n"

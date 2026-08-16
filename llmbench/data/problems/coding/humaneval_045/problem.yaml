@@ -1,0 +1,13 @@
+id: humaneval_045
+entrypoint: triangle_area
+timeout_s: 15
+source: HumanEval/45
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def triangle_area(a, h):
+      """Given length of a side and high return area for a triangle.
+      >>> triangle_area(5, 3)
+      7.5
+      """

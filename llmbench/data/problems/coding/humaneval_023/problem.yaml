@@ -1,0 +1,15 @@
+id: humaneval_023
+entrypoint: strlen
+timeout_s: 15
+source: HumanEval/23
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def strlen(string: str) -> int:
+      """ Return length of given string
+      >>> strlen('')
+      0
+      >>> strlen('abc')
+      3
+      """

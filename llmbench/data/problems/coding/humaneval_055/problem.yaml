@@ -1,0 +1,17 @@
+id: humaneval_055
+entrypoint: fib
+timeout_s: 15
+source: HumanEval/55
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def fib(n: int):
+      """Return n-th Fibonacci number.
+      >>> fib(10)
+      55
+      >>> fib(1)
+      1
+      >>> fib(8)
+      21
+      """

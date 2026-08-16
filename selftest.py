@@ -7,9 +7,12 @@ graders accept correct answers, and neutrally otherwise. Run: python selftest.py
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import re
 import tempfile
+
+import yaml
 
 from llmbench.models import ModelFingerprint
 from llmbench.targets.base import GenResult, Target, approx_tokens
@@ -24,6 +27,29 @@ _ENTRY = re.compile(r"function `(\w+)`")
 # Reached through resources.py rather than a relative path, so this works from any
 # directory and does not go stale when the bundled data moves.
 _PROBLEMS = data_path("problems", "coding")
+
+
+@functools.lru_cache(maxsize=1)
+def _reference_solutions() -> list[tuple[str, str]]:
+    """(prompt, solution) for every bundled problem, read once.
+
+    Keyed by the **prompt**, not by the entry-point name. The entry point is not unique:
+    HumanEval alone has six names shared by two problems each (`add`, `solve`,
+    `sort_array` and three more), and the older substring scan over problem.yaml matched
+    the wrong file first for twenty of the 168 problems - handing back a correct solution
+    to a different question, which then failed its tests and read as a harness fault.
+    The prompt appears verbatim in the message the evaluator builds and is unique.
+    """
+    out = []
+    for directory in sorted(_PROBLEMS.iterdir()):
+        meta = directory / "problem.yaml"
+        if not (directory.is_dir() and meta.exists()):
+            continue
+        parsed = yaml.safe_load(meta.read_text(encoding="utf-8"))
+        out.append((parsed["prompt"].strip(),
+                    (directory / "solution.py").read_text(encoding="utf-8")))
+    # Longest first, so a prompt that contains another as a substring cannot shadow it.
+    return sorted(out, key=lambda pair: -len(pair[0]))
 
 
 class MockTarget(Target):
@@ -81,14 +107,12 @@ class MockTarget(Target):
             return '{"name":"get_weather","arguments":{"city":"Leeds","units":"celsius"}}'
         if "create_event" in user:
             return '{"name":"create_event","arguments":{"title":"Team sync","date":"2026-01-15"}}'
-        # coding
-        em = _ENTRY.search(user)
-        if em:
-            for d in _PROBLEMS.iterdir():
-                meta = d / "problem.yaml"
-                if meta.exists() and em.group(1) in meta.read_text(encoding="utf-8"):
-                    return (f"```python\n"
-                            f"{(d / 'solution.py').read_text(encoding='utf-8')}\n```")
+        # coding: answer with this problem's own reference solution, so anything below a
+        # perfect score means the harness failed to run correct code.
+        if _ENTRY.search(user):
+            for prompt, solution in _reference_solutions():
+                if prompt and prompt in user:
+                    return f"```python\n{solution}\n```"
         # ifeval: satisfy a couple of easy constraints generically
         if "three bullet points" in user:
             return "- one\n- two\n- three"
@@ -144,6 +168,11 @@ evaluators:
     queries_per_rung: 2
   coding:
     execute: true
+    # A handful, not all 168. This checks that the harness runs correct code correctly,
+    # which four problems establish as well as 168 do - and 168 pytest subprocesses would
+    # add three minutes to every run of the suite on every platform in the matrix.
+    # `test_humaneval_problems.py` is what covers the converted set.
+    problem_ids: [two_sum, kadane, humaneval_000, humaneval_032]
   human:
     limit: 3
   oneshot:

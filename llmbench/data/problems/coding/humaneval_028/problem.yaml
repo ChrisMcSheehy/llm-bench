@@ -1,0 +1,16 @@
+id: humaneval_028
+entrypoint: concatenate
+timeout_s: 15
+source: HumanEval/28
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |
+  from typing import List
+
+
+  def concatenate(strings: List[str]) -> str:
+      """ Concatenate list of strings into a single string
+      >>> concatenate([])
+      ''
+      >>> concatenate(['a', 'b', 'c'])
+      'abc'
+      """

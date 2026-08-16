@@ -1,0 +1,10 @@
+id: humaneval_132
+entrypoint: is_nested
+timeout_s: 15
+source: HumanEval/132
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: "\ndef is_nested(string):\n    '''\n    Create a function that takes a string as input which contains\
+  \ only square brackets.\n    The function should return True if and only if there is a valid subsequence\
+  \ of brackets \n    where at least one bracket in the subsequence is nested.\n\n    is_nested('[[]]')\
+  \ ➞ True\n    is_nested('[]]]]]]][[[[[]') ➞ False\n    is_nested('[][]') ➞ False\n    is_nested('[]')\
+  \ ➞ False\n    is_nested('[[][]]') ➞ True\n    is_nested('[[]][[') ➞ True\n    '''\n"
