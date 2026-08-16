@@ -20,7 +20,12 @@ def test_bundled_coding_problems_are_found(tmp_path, monkeypatch):
     problems = data_path("problems", "coding")
     assert problems.is_dir()
     names = sorted(p.name for p in problems.iterdir() if p.is_dir())
-    assert names == ["balanced_brackets", "kadane", "rle_encode", "two_sum"]
+    # The four written for this project, plus the 164 converted from HumanEval. Asserted
+    # as a floor and a count rather than an exact list: the list was exact, and adding a
+    # problem set then failed here for no reason connected to what this test is about,
+    # which is that bundled data is found from any working directory.
+    assert {"balanced_brackets", "kadane", "rle_encode", "two_sum"} <= set(names)
+    assert len([n for n in names if n.startswith("humaneval_")]) == 164
 
 
 def test_unset_data_file_falls_back_to_the_bundled_copy():

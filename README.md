@@ -41,7 +41,10 @@ OpenRouter), and it will:
 
    *Code & fidelity:*
    - `coding` — generates solutions to pre-solved problems, grades against
-     held-out unit tests (`pass@k`).
+     held-out unit tests (`pass@k`). **168 problems**: OpenAI's HumanEval (164,
+     MIT, converted and bundled — no download) plus four written for this project.
+     Four problems moved the pass rate in steps of 25%; 168 can separate two
+     quantisations of one model.
    - `perplexity` — exact teacher-forced PPL via the native `llama-perplexity`
      binary over the detected GGUF (opt-in; the HTTP API can't do this). Run it
      for F16 and each quant of a model to see precisely what the quant costs.
@@ -627,6 +630,12 @@ orchestrator doesn't care which side of a socket the module lives on.
   it is **not** a sandbox. Run it against models you trust, set `execute: false`
   to grade extraction only, or run the bench inside a container if the output
   could be adversarial.
+  **With 168 problems this is 41× the execution exposure it was with four.** The
+  posture has not changed and neither has the advice; there is simply a lot more
+  of it. `problem_ids:` in the suite file runs a subset.
+- **A full coding run is 168 model calls and 168 pytest subprocesses.** That is the
+  point — four problems could not separate two quantisations — but it is not quick.
+  Use `problem_ids:` while you are wiring things up.
 - Results are stored at `~/.llmbench/llmbench.db`. Set `LLMBENCH_DB` to override —
   the bench and the dashboard both read it, so they always open the same database.
 - Needle depth is split by character proportion (calibrated against the real
@@ -643,7 +652,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 379 automated checks across 47 files. Almost every one of them
+`llmbench` has 551 automated checks across 48 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 

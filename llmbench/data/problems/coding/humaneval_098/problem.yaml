@@ -1,0 +1,8 @@
+id: humaneval_098
+entrypoint: count_upper
+timeout_s: 15
+source: HumanEval/98
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: "\ndef count_upper(s):\n    \"\"\"\n    Given a string s, count the number of uppercase vowels\
+  \ in even indices.\n    \n    For example:\n    count_upper('aBCdEf') returns 1\n    count_upper('abcdefg')\
+  \ returns 0\n    count_upper('dBBE') returns 0\n    \"\"\"\n"

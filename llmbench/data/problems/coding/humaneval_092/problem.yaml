@@ -1,0 +1,10 @@
+id: humaneval_092
+entrypoint: any_int
+timeout_s: 15
+source: HumanEval/92
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: "\ndef any_int(x, y, z):\n    '''\n    Create a function that takes 3 numbers.\n    Returns true\
+  \ if one of the numbers is equal to the sum of the other two, and all numbers are integers.\n    Returns\
+  \ false in any other cases.\n    \n    Examples\n    any_int(5, 2, 7) ➞ True\n    \n    any_int(3, 2,\
+  \ 2) ➞ False\n\n    any_int(3, -2, 1) ➞ True\n    \n    any_int(3.6, -2.2, 2) ➞ False\n  \n\n    \n\
+  \    '''\n"

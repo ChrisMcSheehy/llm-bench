@@ -1,0 +1,21 @@
+id: humaneval_049
+entrypoint: modp
+timeout_s: 15
+source: HumanEval/49
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def modp(n: int, p: int):
+      """Return 2^n modulo p (be aware of numerics).
+      >>> modp(3, 5)
+      3
+      >>> modp(1101, 101)
+      2
+      >>> modp(0, 101)
+      1
+      >>> modp(3, 11)
+      8
+      >>> modp(100, 101)
+      1
+      """

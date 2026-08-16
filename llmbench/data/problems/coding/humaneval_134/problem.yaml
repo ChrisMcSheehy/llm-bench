@@ -1,0 +1,11 @@
+id: humaneval_134
+entrypoint: check_if_last_char_is_a_letter
+timeout_s: 15
+source: HumanEval/134
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: "\ndef check_if_last_char_is_a_letter(txt):\n    '''\n    Create a function that returns True\
+  \ if the last character\n    of a given string is an alphabetical character and is not\n    a part of\
+  \ a word, and False otherwise.\n    Note: \"word\" is a group of characters separated by space.\n\n\
+  \    Examples:\n    check_if_last_char_is_a_letter(\"apple pie\") ➞ False\n    check_if_last_char_is_a_letter(\"\
+  apple pi e\") ➞ True\n    check_if_last_char_is_a_letter(\"apple pi e \") ➞ False\n    check_if_last_char_is_a_letter(\"\
+  \") ➞ False \n    '''\n"

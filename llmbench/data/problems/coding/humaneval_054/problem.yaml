@@ -1,0 +1,24 @@
+id: humaneval_054
+entrypoint: same_chars
+timeout_s: 15
+source: HumanEval/54
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: |2
+
+
+  def same_chars(s0: str, s1: str):
+      """
+      Check if two words have the same characters.
+      >>> same_chars('eabcdzzzz', 'dddzzzzzzzddeddabc')
+      True
+      >>> same_chars('abcd', 'dddddddabc')
+      True
+      >>> same_chars('dddddddabc', 'abcd')
+      True
+      >>> same_chars('eabcd', 'dddddddabc')
+      False
+      >>> same_chars('abcd', 'dddddddabce')
+      False
+      >>> same_chars('eabcdzzzz', 'dddzzzzzzzddddabc')
+      False
+      """

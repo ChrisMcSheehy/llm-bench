@@ -478,6 +478,38 @@ third angle: here the check could not tell success from *never having been asked
 
 ---
 
+## [2026-08-16] a-key-that-is-unique-in-a-small-set-stops-being-unique-in-a-large-one
+
+- **Trigger:** importing HumanEval took the coding problem set from 4 directories to 168.
+  `selftest.py`'s mock backend answers a coding question with that problem's own reference
+  solution, and found it by scanning `problem.yaml` files for the entry-point name **as a
+  substring**. With four problems the names were distinct and it worked. With 168 it
+  returned the wrong problem's solution for **twenty** of them, and six entry-point names
+  turned out to be shared by two HumanEval problems each, so even an exact match on the
+  entry point would not have been unique. The end-to-end test failed with
+  `coding=0.8869`, and its own comment says anything below 1.0 means *the harness failed
+  to run correct code* — so the first reading was a fault in the code-execution harness,
+  which is the most alarming thing this project has.
+- **Lesson:** a lookup key is only as unique as the data it has met so far, and "it has
+  always worked" is evidence about the old size of the set, not about the key. The
+  dangerous part is not the collision, it is the direction of the failure: handing back a
+  *correct solution to a different question* produces a plausible score, not an error, and
+  the failure surfaces in whatever the wrong answer breaks — here, as an accusation
+  against the harness. A test fixture that identifies things loosely will eventually
+  slander the code it was written to protect.
+- **Enforcement:** the mock now keys on the **prompt**, which appears verbatim in the
+  message the evaluator builds and is genuinely unique, and it is built once and sorted
+  longest-first so that one prompt containing another cannot shadow it. The lookup is a
+  named function with the reasoning in its docstring rather than an inline scan.
+- **Scope:** global. Applies to every match-by-substring and every lookup keyed on
+  something merely *usually* distinct — names, labels, prefixes, titles.
+
+Related: [[a-substring-match-discards-the-qualifier-that-made-it-different]] — the same
+mistake seen from the other end: there, extra characters around the match were discarded;
+here, the match was found in the wrong place entirely.
+
+---
+
 ## [2026-08-15] a-substring-match-discards-the-qualifier-that-made-it-different
 
 - **Trigger:** reading Unsloth's documentation while answering an unrelated question.

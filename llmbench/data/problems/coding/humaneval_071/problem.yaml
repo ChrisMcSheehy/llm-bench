@@ -1,0 +1,10 @@
+id: humaneval_071
+entrypoint: triangle_area
+timeout_s: 15
+source: HumanEval/71
+license: MIT (OpenAI HumanEval) - see HUMANEVAL.md
+prompt: "\ndef triangle_area(a, b, c):\n    '''\n    Given the lengths of the three sides of a triangle.\
+  \ Return the area of\n    the triangle rounded to 2 decimal points if the three sides form a valid triangle.\
+  \ \n    Otherwise return -1\n    Three sides make a valid triangle when the sum of any two sides is\
+  \ greater \n    than the third side.\n    Example:\n    triangle_area(3, 4, 5) == 6.00\n    triangle_area(1,\
+  \ 2, 10) == -1\n    '''\n"

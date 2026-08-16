@@ -128,6 +128,23 @@ docs/ironclad/  design docs, plans, lessons
   generated, because `store.py`'s `QUALITY_METRICS` reads those names to decide what may
   be pooled across machines. `coding` keeps its own loop: its buckets already exist for
   `pass@k`, and deriving the same figures twice by two rules would let them disagree.
+- **2026-08-16 — HumanEval is 164 committed problem directories, not a second harness.**
+  Converted once into this project's existing `problem.yaml` + `tests.py` + `solution.py`
+  format and committed; the converter is not shipped (design B1). The existing harness
+  already samples completions, extracts the code block, runs pytest in a killed-on-timeout
+  subprocess and scores with the unbiased pass@k estimator HumanEval itself defines, so a
+  second harness would duplicate all of it to gain nothing. Committed rather than
+  downloaded because bundled data ships in the wheel and a downloaded corpus is one silent
+  upstream edit away from making last month's results incomparable. Attribution and the
+  MIT notice live in `problems/coding/HUMANEVAL.md`. `tests.py` imports the solution
+  module with a wildcard as well as by name, because three problems' checks call a helper
+  the prompt defines rather than only the entry point. Every one of the 164 reference
+  solutions was executed through the real harness before being committed, which is how
+  those three were found. **Documented difference from HumanEval's own protocol:** it asks
+  a model to *complete* the prompt, so the prompt's own code is always present; this bench
+  asks for a complete solution, which makes those three problems harder here. A score from
+  this bench is not interchangeable with a published HumanEval number, which is true of
+  every suite here.
 - **2026-08-15 — a third ladder evaluator, and the first with resolution below pass/fail.**
   `evaluators/reassembly.py` plants three labelled fragments of a generated hexadecimal key
   at three depths and grades the reassembled answer in four tiers (design B5). It adds no
