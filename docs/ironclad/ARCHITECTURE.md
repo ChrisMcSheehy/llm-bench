@@ -128,6 +128,20 @@ docs/ironclad/  design docs, plans, lessons
   generated, because `store.py`'s `QUALITY_METRICS` reads those names to decide what may
   be pooled across machines. `coding` keeps its own loop: its buckets already exist for
   `pass@k`, and deriving the same figures twice by two rules would let them disagree.
+- **2026-08-16 — the dashboard may name a suite to run; it may never supply one.**
+  `POST /api/run` takes a suite name and an optional profile name and nothing else
+  (design B6). `resources.resolve_suite` checks the name against `[A-Za-z0-9_-]+` and then
+  looks it up in a listing of files that already exist, so the set of things the web layer
+  can run is exactly the set the user wrote to disk. The request model sets
+  `extra="forbid"`, so an unexpected field is refused rather than dropped — silently
+  ignoring one is how a request that meant to smuggle something gets a success back. This
+  is decision L1 restated for a second verb: L1 stops the browser choosing which binary
+  runs, and a trigger accepting a suite *body* would hand that back, because a suite names
+  targets and a target is an address and an argument list. One run at a time, for the
+  reason the sweep never starts two servers at once: two servers sharing a graphics card
+  contend for it and corrupt the speed figures. The background task records its own
+  failure rather than raising, because nothing awaits it and the dashboard would otherwise
+  show "running" for ever.
 - **2026-08-16 — a test module declares its chart; the dashboard renders it generically.**
   `View(kind, title, x, y, value)` on an evaluator, `Store.view_data` to group its samples
   by one or two dimensions, and one `/api/run/{id}/views` endpoint serving all of them

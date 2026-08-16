@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **50 test files, 593 checks, all passing** — verified 2026-08-16, 110
+Current state: **51 test files, 608 checks, all passing** — verified 2026-08-16, 110
 seconds.
 
 ---
@@ -571,6 +571,31 @@ claim; empty is an absence.
 ---
 
 # Group 7 — "Does what you see match what happened?"
+
+### `test_dashboard_run_trigger.py` (15 checks) — the web page may point, not write
+
+The dashboard can now start a benchmark run for you. That is a button on a web page that
+makes a program run on your computer, so the interesting question is not what it can do —
+it is what it **cannot**.
+
+It may send **two names**: which suite, and optionally which saved server profile. That is
+the whole of it. Both are looked up in files that already exist on your disk.
+
+Most of these checks are attempts to get it to accept something else, and confirm each is
+refused before anything touches the filesystem:
+
+- Paths dressed as names — `../../../etc/passwd`, the Windows equivalent, a leading slash,
+  even `default.yaml` (a filename is not a name; the extension is ours to add).
+- A **suite written into the request itself**. This is the one that matters. A suite lists
+  what to test, and each entry is an address plus a list of command-line arguments — so
+  accepting one would be a way to run more or less anything on the machine hosting the
+  dashboard.
+- Any unexpected field at all, refused rather than quietly ignored, because ignoring is
+  how a request that meant to smuggle something gets a cheerful "OK" back.
+
+Plus: two runs can't overlap (two model servers sharing one graphics card fight over it
+and ruin the speed figures), and a run that fails reports the failure instead of appearing
+to run forever.
 
 ### `test_views.py` (11 checks) — a new test module gets a chart by asking for one
 
