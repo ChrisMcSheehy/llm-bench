@@ -128,6 +128,27 @@ docs/ironclad/  design docs, plans, lessons
   generated, because `store.py`'s `QUALITY_METRICS` reads those names to decide what may
   be pooled across machines. `coding` keeps its own loop: its buckets already exist for
   `pass@k`, and deriving the same figures twice by two rules would let them disagree.
+- **2026-08-15 — a third ladder evaluator, and the first with resolution below pass/fail.**
+  `evaluators/reassembly.py` plants three labelled fragments of a generated hexadecimal key
+  at three depths and grades the reassembled answer in four tiers (design B5). It adds no
+  ladder rules, as `_ladder.py`'s entry anticipated. The overlap with `long_context` is
+  real and is not the justification: multi-hop retrieval under distractors already exists
+  there. What is new is retrieving several items and emitting them *together*, scoring
+  assembly separately from retrieval, and **bit accuracy as a gradient** — every other
+  long-context figure here is 1.0 or 0.0, which says a line was crossed and nothing about
+  how far. `score` is the bit accuracy so the per-rung breakdown inherits the gradient;
+  `passed` is the exact match so a wrong-length answer still counts as the failure it is.
+  Hexadecimal because it is exactly four bits per character, which is what makes a
+  bit-level comparison meaningful; base64 would measure transcription luck. The key is
+  generated per cell from a seed and never taken from anything published — a real key may
+  sit in training data, and a model reciting a memorised one would score perfectly while
+  retrieving nothing. A wrong-length answer reports bit accuracy as **None**, because
+  comparing bits across lengths measures alignment and would turn a structural failure
+  into a plausible-looking ~50%.
+- **2026-08-15 — the haystack is built in one place.** `_sizing.py` holds the filler
+  vocabulary and `build_filler`, shared by `needle` and `reassembly`, so the document a
+  fact is buried in is the same kind of text in each and results from the two are
+  comparable.
 - **2026-08-15 — launch profiles resolve their defaults and variables at load time.**
   `load_profiles` merges `defaults.args` ahead of each profile's own and substitutes
   `{name}` from `defaults.vars` (design B7), so what leaves the loader is a real path and

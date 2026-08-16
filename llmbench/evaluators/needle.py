@@ -17,26 +17,12 @@ import re
 from typing import Any
 
 from llmbench.evaluators._ladder import climb, context_ladder
-from llmbench.evaluators._sizing import chars_per_token
+from llmbench.evaluators._sizing import (
+    CALIBRATION_PROBE, CITIES, WORDS, build_filler, chars_per_token,
+)
 from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
-
-_CITIES = [
-    "Brindlemoor", "Vantag", "Ashford Cross", "Kelbourne", "Marrowdeep",
-    "Highcinder", "Ostravel", "Dunmarch", "Fenwillow", "Corveth",
-]
-_WORDS = ["amber", "quartz", "cobalt", "verdant", "saffron", "cinder", "harbor",
-          "lantern", "meridian", "thistle", "fathom", "gable", "orchard"]
-
-_FILLER_TEMPLATES = [
-    "The council of {c} recorded that the {w1} shipments arrived before the {w2} season.",
-    "In the district of {c}, {w1} merchants traded quietly along the {w2} road.",
-    "Records from {c} note an unusually mild winter, with {w1} frost and {w2} rain.",
-    "The librarian of {c} catalogued {w1} manuscripts beside the {w2} archives.",
-    "Travellers passing through {c} spoke of {w1} lanterns and {w2} bridges.",
-    "A survey of {c} listed {w1} orchards, {w2} mills, and several old wells.",
-]
 
 #: The recall a rung must still reach to count as usable context. Two thirds, so a rung
 #: that fails a third of its probes is not reported as one the model can work at.
@@ -72,7 +58,7 @@ class NeedleEvaluator(Evaluator):
         n_ctx = ctx.fingerprint.n_ctx or 8192
 
         lengths = self._lengths(cfg, n_ctx)
-        cpt = await self._chars_per_token(ctx)
+        cpt = await chars_per_token(ctx, CALIBRATION_PROBE)
 
         async def rung(length: int) -> list[Sample]:
             budget_tokens = max(512, length - cfg["overhead_tokens"] - cfg["answer_tokens"])
@@ -102,29 +88,14 @@ class NeedleEvaluator(Evaluator):
             return sorted({max(512, int(n_ctx * f)) for f in cfg["context_fractions"]})
         return context_ladder(n_ctx, cfg["ladder_knots"], cfg["max_rungs"])
 
-    async def _chars_per_token(self, ctx: EvalContext) -> float:
-        block = " ".join(
-            t.format(c="Brindlemoor", w1="amber", w2="cobalt") for t in _FILLER_TEMPLATES
-        ) * 8
-        return await chars_per_token(ctx, block)
-
-    def _build_filler(self, rng: random.Random, char_budget: int) -> str:
-        parts, size = [], 0
-        while size < char_budget:
-            t = rng.choice(_FILLER_TEMPLATES)
-            s = t.format(c=rng.choice(_CITIES), w1=rng.choice(_WORDS), w2=rng.choice(_WORDS))
-            parts.append(s)
-            size += len(s) + 1
-        return " ".join(parts)
-
     async def _one(self, ctx, cfg, rng, length, budget_tokens, depth, cpt, rep) -> Sample:
-        city = rng.choice(_CITIES)
-        code = f"{rng.choice(_WORDS).upper()}-{rng.randint(1000, 9999)}"
+        city = rng.choice(CITIES)
+        code = f"{rng.choice(WORDS).upper()}-{rng.randint(1000, 9999)}"
         needle = (f" IMPORTANT: The special access code for the city of {city} "
                   f"is {code}. Remember it. ")
 
         char_budget = int(budget_tokens * cpt)
-        filler = self._build_filler(rng, char_budget)
+        filler = build_filler(rng, char_budget)
         cut = int(len(filler) * (depth / 100.0))
         # snap to a word boundary so we don't bisect a token nastily
         space = filler.rfind(" ", 0, cut) if cut else 0

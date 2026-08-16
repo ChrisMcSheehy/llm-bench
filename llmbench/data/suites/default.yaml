@@ -29,6 +29,10 @@ evaluators:
     depths: [0, 25, 50, 75, 100]
   long_context:               # RULER/MRCR-style multi-key + variable tracking
     tasks: [multikey, vartrack]
+  reassembly:                 # find three fragments of a key and put them back together
+    # Graded in four tiers, of which bit accuracy is a gradient rather than pass/fail -
+    # so a rung where a configuration starts to degrade says how far, not just that it did.
+    repeats: 1
 
   # --- speed (two figures: reading the prompt, and writing the answer) ---
   speed:

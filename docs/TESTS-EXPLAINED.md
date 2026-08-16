@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **46 test files, 355 checks, all passing** — verified 2026-08-15, 75
+Current state: **47 test files, 378 checks, all passing** — verified 2026-08-15, 75
 seconds.
 
 ---
@@ -171,6 +171,38 @@ The hard part is what counts in the denominator, and most of these checks are ab
   thinking and returns nothing does so on any computer.
 - It survives being written to the database, and an older database **gains the column
   without inventing values** for rows recorded before anyone was tracking this.
+
+### `test_reassembly.py` (20 checks) — "it broke" is not the same as "how badly"
+
+Every other long-context test in this project answers in whole numbers: the model either
+found the hidden thing or it didn't. That's fine for *did it work*, and useless for the
+question this project actually exists to answer — **how much quality did compressing the
+memory cost me?** A pass/fail says a line was crossed somewhere between two settings, and
+nothing about how far past it you are.
+
+So this test hides three labelled pieces of a long random key at three depths in a big
+document, asks for them back joined together, and marks the answer four ways: how many
+pieces came back, whether they were in the right order, **how many of the individual bits
+are right**, and whether the whole thing is perfect.
+
+The bit score is the point, and it's why the key is written in hex — each character is
+exactly four bits, so "90% correct" means something precise. These checks include:
+
+- One mistyped character scores **just under perfect**, not zero. Every other test here
+  would call that a flat failure, indistinguishable from finding nothing at all.
+- An answer of the **wrong length** reports the bit score as **unknown — a dash, never a
+  number**. Comparing bits between different-length strings measures alignment rather than
+  memory, and would turn a structural failure into a respectable-looking ~50%.
+- But that answer is **still counted as a failure** elsewhere, and the count of pieces
+  found still reports what the model retrieved, so the result is diagnosable rather than
+  blank.
+- The **right pieces in the wrong order** is recorded as an assembly failure with perfect
+  retrieval — reading worked, writing didn't. No other test here can express that.
+- The key is **generated, never borrowed** from anything real: a genuine published key
+  might sit in the model's training data, and a model reciting one from memory would score
+  perfectly while retrieving nothing. Same seed, same key, so runs stay comparable — and a
+  **different key for every cell**, so a server reusing its memory between questions can't
+  carry an answer forward.
 
 ### `test_speed.py` (10 checks) — one number that was two numbers in a trenchcoat
 
