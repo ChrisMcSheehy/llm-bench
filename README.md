@@ -643,7 +643,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 378 automated checks across 47 files. Almost every one of them
+`llmbench` has 379 automated checks across 47 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 

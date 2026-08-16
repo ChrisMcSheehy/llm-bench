@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **47 test files, 378 checks, all passing** — verified 2026-08-15, 75
+Current state: **47 test files, 379 checks, all passing** — verified 2026-08-15, 75
 seconds.
 
 ---
