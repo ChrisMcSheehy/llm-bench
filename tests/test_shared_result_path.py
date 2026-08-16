@@ -27,6 +27,20 @@ from llmbench.targets.base import GenResult, Target
 _MEASUREMENTS = ("input_tokens", "output_tokens", "latency_ms",
                  "tok_per_sec", "server_prompt_tps", "server_gen_tps")
 
+#: What every sample carries, however many rounds produced it: how much went in, how much
+#: came out, how long it took.
+_TOTALS = ("input_tokens", "output_tokens", "latency_ms")
+#: Per-token speeds, which only mean anything for a single request.
+_RATES = ("tok_per_sec", "server_prompt_tps", "server_gen_tps")
+
+#: Evaluators whose samples come from a multi-round exchange rather than one call, and
+#: which therefore record no rate at all (design B4, option b). Dividing generated tokens
+#: by a duration that includes reading every intermediate tool result is the blended
+#: figure design B3 removed; taking one round's rate instead would report whichever round
+#: happened to be last. Absent is the honest answer, and this list makes it a decision
+#: rather than an omission.
+_MULTI_ROUND = {"agency"}
+
 
 class _Timed(Target):
     """A model that answers instantly and reports every timing a real server reports.
@@ -69,6 +83,7 @@ _CONFIGS = {
     "oneshot": {"limit": 1},
     "speed": {"scenarios": ["decode"], "trials": 1, "warmup": False},
     "reassembly": {"context_lengths": [2048], "repeats": 1},
+    "agency": {"scenarios": ["lookup_email"], "max_rounds": 3},
 }
 
 
@@ -81,15 +96,42 @@ def _samples(name: str) -> list[Sample]:
 
 
 @pytest.mark.parametrize("name", sorted(_CONFIGS))
-def test_every_evaluator_records_every_measurement(name):
+def test_every_evaluator_records_what_the_exchange_cost(name):
+    """Tokens in, tokens out, time taken — for every module, however many rounds it took."""
     graded = [s for s in _samples(name) if s.error is None and s.skipped is None]
     assert graded, f"{name} produced nothing to inspect"
 
-    missing = {field for s in graded for field in _MEASUREMENTS
-               if getattr(s, field) is None}
+    missing = {field for s in graded for field in _TOTALS if getattr(s, field) is None}
     assert not missing, (
-        f"{name} recorded no {sorted(missing)} — the shared path fills all six, so a "
+        f"{name} recorded no {sorted(missing)} — the shared path fills these, so a "
         f"module missing one has stopped using it")
+
+
+@pytest.mark.parametrize("name", sorted(set(_CONFIGS) - _MULTI_ROUND))
+def test_a_single_round_evaluator_records_every_speed(name):
+    """The original defect: `needle` and `coding` carried the server's own prefill and
+    decode speeds, `oneshot` carried one, and the other eight carried neither."""
+    graded = [s for s in _samples(name) if s.error is None and s.skipped is None]
+    assert graded, f"{name} produced nothing to inspect"
+
+    missing = {field for s in graded for field in _RATES if getattr(s, field) is None}
+    assert not missing, (
+        f"{name} recorded no {sorted(missing)} — the shared path fills all three, so a "
+        f"module missing one has stopped using it")
+
+
+@pytest.mark.parametrize("name", sorted(_MULTI_ROUND))
+def test_a_multi_round_evaluator_records_no_speed_at_all(name):
+    """Asserted rather than assumed. A rate over a conversation would be generated tokens
+    divided by a duration that includes reading every tool result — the blended figure
+    design B3 removed from this project, reintroduced under a name that looks correct."""
+    graded = [s for s in _samples(name) if s.error is None and s.skipped is None]
+    assert graded, f"{name} produced nothing to inspect"
+
+    present = {field for s in graded for field in _RATES if getattr(s, field) is not None}
+    assert not present, (
+        f"{name} published {sorted(present)} for a multi-round exchange, where a "
+        f"per-token rate does not describe anything")
 
 
 def test_the_evaluator_list_covers_everything_that_generates():

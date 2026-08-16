@@ -134,6 +134,7 @@ _CONFIGS = {
     "oneshot": {"limit": 1},
     "speed": {"scenarios": ["decode"], "trials": 1, "warmup": False},
     "reassembly": {"context_lengths": [2048], "repeats": 1},
+    "agency": {"scenarios": ["lookup_email"], "max_rounds": 3},
 }
 
 

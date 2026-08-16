@@ -34,6 +34,13 @@ evaluators:
     # so a rung where a configuration starts to degrade says how far, not just that it did.
     repeats: 1
 
+  # --- tool use, against a simulated company with a frozen clock ---------
+  agency:
+    # Scored per check, not per scenario. Two of the checks are the point: declining
+    # without touching anything when no tool can help, and never reaching for the
+    # plausible always-wrong tool that is visible throughout.
+    max_rounds: 6
+
   # --- speed (two figures: reading the prompt, and writing the answer) ---
   speed:
     # One warm-up per scenario then three timed trials, reported as medians.
