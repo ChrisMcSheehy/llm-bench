@@ -128,6 +128,20 @@ docs/ironclad/  design docs, plans, lessons
   generated, because `store.py`'s `QUALITY_METRICS` reads those names to decide what may
   be pooled across machines. `coding` keeps its own loop: its buckets already exist for
   `pass@k`, and deriving the same figures twice by two rules would let them disagree.
+- **2026-08-16 — a test module declares its chart; the dashboard renders it generically.**
+  `View(kind, title, x, y, value)` on an evaluator, `Store.view_data` to group its samples
+  by one or two dimensions, and one `/api/run/{id}/views` endpoint serving all of them
+  (design E3). This replaces `needle_heatmap`, `coding_breakdown` and
+  `throughput_by_context` — three queries with an evaluator's name written into the SQL —
+  and the three hand-written Plotly calls that consumed them. The plugin claim was only
+  ever half true before: a module was discovered and run automatically, then stopped at
+  the generic leaderboard, and giving it a chart meant editing three files its author was
+  never told about. Five renderers, because they are what the dashboard already drew —
+  this is the existing charts described as data, not a speculative abstraction. `kind` and
+  `value` are validated in `View.__post_init__` so a typo fails when the module is
+  imported rather than when someone opens the dashboard. A cell nobody probed reports
+  `None` and a count of zero, where the old heatmap wrote `0.0` and drew a confident dark
+  square meaning "this failed".
 - **2026-08-16 — a multi-round exchange is a sibling of `run_case`, not a special case of
   it.** `Evaluator.run_conversation` drives a bounded tool-calling conversation and
   returns one Sample (design B4). It sums tokens and latency across rounds and records

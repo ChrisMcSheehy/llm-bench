@@ -72,7 +72,7 @@ def test_the_heatmap_says_how_many_samples_each_cell_holds(tmp_path):
         Sample(evaluator="needle", case_id="8192:50:0", score=1.0,
                dims={"context_len": 8192, "depth_pct": 50}),
     ])
-    heat = store.needle_heatmap("r1")
+    heat = store.view_data("r1", "needle", x="context_len", y="depth_pct")
     store.close()
 
     assert heat["z"] == [[0.5, 1.0]], heat["z"]
@@ -92,7 +92,7 @@ def test_a_cell_nobody_probed_counts_zero_rather_than_one(tmp_path):
         Sample(evaluator="needle", case_id="8192:50", score=1.0,
                dims={"context_len": 8192, "depth_pct": 50}),
     ])
-    heat = store.needle_heatmap("r1")
+    heat = store.view_data("r1", "needle", x="context_len", y="depth_pct")
     store.close()
 
     # Two lengths x two depths, and only two of the four corners were probed.

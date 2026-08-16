@@ -37,7 +37,7 @@ from typing import Any, Callable, Optional
 from llmbench.evaluators import _office
 from llmbench.evaluators._extract import first_json
 from llmbench.evaluators.base import (
-    Breakdown, Conversation, EvalContext, Evaluator, Verdict,
+    Breakdown, Conversation, EvalContext, Evaluator, Verdict, View,
 )
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
@@ -219,6 +219,7 @@ class AgencyEvaluator(Evaluator):
     #: aggregation rather than needing bespoke code - which is what made "the check" the
     #: right unit to score.
     breakdowns = [Breakdown("skill_pass_rate", ("skill",))]
+    views = [View("bar", "checks met by scenario", x="scenario")]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)

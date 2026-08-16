@@ -20,7 +20,7 @@ from llmbench.evaluators._ladder import climb, context_ladder
 from llmbench.evaluators._sizing import (
     CALIBRATION_PROBE, CITIES, WORDS, build_filler, chars_per_token,
 )
-from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict, View
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
 
@@ -51,6 +51,8 @@ class NeedleEvaluator(Evaluator):
     version = "1"
     default_config = _DEFAULTS
     breakdowns = [Breakdown("recall", ("context_len",))]
+    views = [View("heatmap", "recall by context length and insertion depth",
+                  x="context_len", y="depth_pct")]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)

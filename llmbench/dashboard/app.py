@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from llmbench import launcher
+from llmbench.registry import available, get
 from llmbench.store import Store, default_db_path
 
 app = FastAPI(title="llmbench")
@@ -82,25 +83,36 @@ def metrics(run_id: str):
     s = store(); out = s.metrics_for(run_id); s.close(); return out
 
 
-@app.get("/api/run/{run_id}/needle")
-def needle(run_id: str):
-    s = store(); out = s.needle_heatmap(run_id); s.close(); return out
+@app.get("/api/run/{run_id}/views")
+def views(run_id: str):
+    """Every chart every test module declared, with its data (design E3).
+
+    One endpoint for all of them, replacing the three that each had an evaluator's name
+    written into them. A module gets a chart by declaring `views` in its own file, and
+    nothing here or in the front end needs to know it exists.
+
+    Views with no data are dropped rather than returned empty: a run whose suite did not
+    include a module should show no chart for it, not an empty pair of axes.
+    """
+    s = store()
+    try:
+        drawn = []
+        for name in available():
+            for view in get(name)().views:
+                data = s.view_data(run_id, name, view.x, view.y, view.value)
+                if not data.get("x"):
+                    continue
+                drawn.append({"evaluator": name, "kind": view.kind, "title": view.title,
+                              "x_label": view.x, "y_label": view.y, "data": data})
+        return drawn
+    finally:
+        s.close()
 
 
 @app.get("/api/run/{run_id}/skipped")
 def skipped(run_id: str):
     """What this run did not attempt, and why."""
     s = store(); out = s.skipped(run_id); s.close(); return out
-
-
-@app.get("/api/run/{run_id}/coding")
-def coding(run_id: str):
-    s = store(); out = s.coding_breakdown(run_id); s.close(); return out
-
-
-@app.get("/api/run/{run_id}/throughput")
-def throughput(run_id: str):
-    s = store(); out = s.throughput_by_context(run_id); s.close(); return out
 
 
 @app.get("/api/run/{run_id}/capabilities")

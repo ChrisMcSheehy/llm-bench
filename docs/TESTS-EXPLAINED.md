@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **49 test files, 582 checks, all passing** — verified 2026-08-16, 110
+Current state: **50 test files, 593 checks, all passing** — verified 2026-08-16, 110
 seconds.
 
 ---
@@ -571,6 +571,35 @@ claim; empty is an absence.
 ---
 
 # Group 7 — "Does what you see match what happened?"
+
+### `test_views.py` (11 checks) — a new test module gets a chart by asking for one
+
+The project called its test modules "self-contained plugins". That was true of *running*
+them and false of *showing* them: a new module reached the generic leaderboard and stopped
+there, and giving it a chart meant editing the database queries, adding a web endpoint and
+editing the dashboard's HTML — three files its author was never told about.
+
+Now a module says what it wants drawn (`a bar chart of accuracy by subject`) and the
+dashboard draws it. The headline check here **invents a test module that exists nowhere in
+this project**, gives it some results, and confirms its chart is served — with nothing in
+the database code, the endpoint or the front end knowing it exists.
+
+The rest guard the details:
+
+- A cell **nobody probed** comes back as *unknown*, not as zero. The old hand-written
+  heatmap wrote a zero there, which draws as a confident dark square meaning "this
+  failed".
+- Numeric axes **sort as numbers**. Sorted as text, 1024 lands before 512 and the ladder
+  reads backwards.
+- A result that doesn't carry the label a chart groups by is **left out** rather than
+  breaking the grouping.
+- A module that didn't run in this run gets **no chart**, rather than an empty pair of
+  axes implying it ran and found nothing.
+- A typo in a declaration fails **when the module loads**, not when someone opens the
+  dashboard a week later.
+- And every chart declared in this project is checked to name labels its own results
+  actually carry — otherwise it would serve an empty chart forever and nothing would
+  complain.
 
 ### `test_dashboard_counts.py` (7 checks) — no naked figures on screen
 

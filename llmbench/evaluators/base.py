@@ -81,6 +81,45 @@ class Breakdown:
 Grader = Callable[[GenResult], Union[Verdict, Awaitable[Verdict]]]
 
 
+#: What a view may average. An allowlist rather than a free column name: a view is a
+#: declaration in module code, and the store turns it into SQL.
+VIEW_VALUES = ("score", "passed")
+
+#: The renderers the dashboard has. Five, chosen because they are what it already drew —
+#: this is the existing set of charts described as data instead of as code, not a
+#: speculative abstraction. A module needing something genuinely new adds a renderer, and
+#: that is a normal change rather than a failure of the design (design E3).
+VIEW_KINDS = ("bar", "line", "heatmap", "table", "artifact")
+
+
+@dataclass(frozen=True)
+class View:
+    """How a module wants its own samples drawn, declared instead of hand-wired.
+
+    Before this, a new test module reached the leaderboard and stopped there. Giving it a
+    chart meant editing the store, adding an endpoint and editing the HTML — three files
+    its author was never told about. The project described its test modules as
+    self-contained plugins, which was true of running them and false of presenting them.
+    """
+
+    kind: str
+    title: str
+    #: The sample dimension along the horizontal axis.
+    x: str
+    #: A second dimension, for the two-dimensional kinds. None for the rest.
+    y: Optional[str] = None
+    #: Which sample field is averaged in each cell.
+    value: str = "score"
+
+    def __post_init__(self) -> None:
+        # Checked here rather than at render time, so a typo fails when the module is
+        # imported rather than when someone opens the dashboard a week later.
+        if self.kind not in VIEW_KINDS:
+            raise ValueError(f"unknown view kind {self.kind!r}; have {VIEW_KINDS}")
+        if self.value not in VIEW_VALUES:
+            raise ValueError(f"a view may average {VIEW_VALUES}, not {self.value!r}")
+
+
 @dataclass(frozen=True)
 class Conversation:
     """A finished exchange, for a grader that has to judge more than the last reply.
@@ -125,6 +164,9 @@ class Evaluator(abc.ABC):
     #: Per-category figures this module wants. Produced by the default aggregator, so a
     #: module that overrides `aggregate` must call `super()` to get them.
     breakdowns: list[Breakdown] = []
+    #: How this module's samples should be drawn. Served generically by the dashboard, so
+    #: a module gets a chart without its author editing anything outside this file.
+    views: list[View] = []
 
     def resolve_config(self, override: dict[str, Any] | None) -> dict[str, Any]:
         cfg = dict(self.default_config)

@@ -122,6 +122,17 @@ QUALITY_METRICS = frozenset({
 })
 
 
+def _sortable(value):
+    """Order a view's axis labels sensibly whatever they are.
+
+    Context lengths are numbers and must not sort as strings, where 1024 lands before 512.
+    Task names are strings. A view may be declared over either, so numbers sort as numbers
+    and everything else as text, with numbers first — a mixed axis is then at least stable
+    rather than raising.
+    """
+    return (0, float(value), "") if isinstance(value, (int, float)) else (1, 0.0, str(value))
+
+
 # Columns added after the first release. CREATE TABLE IF NOT EXISTS does nothing to a
 # database that already exists, so anything added to SCHEMA below the initial release
 # must also be listed here or it will never reach an existing file.
@@ -414,25 +425,50 @@ class Store:
                FROM host h LEFT JOIN run r ON r.host_hash=h.hash
                GROUP BY h.hash ORDER BY h.last_seen DESC""")
 
-    def needle_heatmap(self, run_id: str) -> dict:
+    def view_data(self, run_id: str, evaluator: str, x: str,
+                  y: Optional[str] = None, value: str = "score") -> dict:
+        """Average `value` over one evaluator's samples, grouped by one or two dimensions.
+
+        The generic replacement for the hand-written per-module queries that used to live
+        here — a needle heatmap, a coding bar chart, a throughput line — each of which had
+        an evaluator's name written into its SQL, so a new test module could not have a
+        chart without this file being edited (design E3).
+
+        Every cell carries its own count, because a colour drawn from one attempt reads
+        exactly like the same colour drawn from five (design D7b). A cell nobody probed
+        reports a count of zero and a value of None: no measurement is not a score of
+        nought, and the renderer draws it as a gap.
+        """
+        if value not in ("score", "passed"):
+            # These reach SQL. A module declaration is code rather than user input, but a
+            # column name assembled from a string is not a habit worth having.
+            raise ValueError(f"a view may average score or passed, not {value!r}")
+
         rows = self._rows(
-            """SELECT dims_json, score FROM sample
-               WHERE run_id=? AND evaluator='needle'
-                 AND error IS NULL AND skipped IS NULL""", (run_id,))
-        cells: dict[tuple[int, int], list[float]] = {}
-        for r in rows:
-            d = json.loads(r["dims_json"])
-            key = (int(d["context_len"]), int(d["depth_pct"]))
-            cells.setdefault(key, []).append(r["score"] or 0.0)
-        lengths = sorted({k[0] for k in cells})
-        depths = sorted({k[1] for k in cells})
-        z = [[round(sum(cells.get((ln, dp), [0])) / max(1, len(cells.get((ln, dp), [1]))), 3)
-              for ln in lengths] for dp in depths]
-        # How many samples each cell averages, so a colour drawn from one attempt can be
-        # told apart from the same colour drawn from five (design D7b). A cell nobody
-        # probed is 0 - it does not borrow the divide-by-zero guard the average uses.
-        n = [[len(cells.get((ln, dp), [])) for ln in lengths] for dp in depths]
-        return {"lengths": lengths, "depths": depths, "z": z, "n": n}
+            f"""SELECT dims_json, {value} AS v FROM sample
+                WHERE run_id=? AND evaluator=?
+                  AND error IS NULL AND skipped IS NULL AND {value} IS NOT NULL""",
+            (run_id, evaluator))
+
+        cells: dict[tuple, list[float]] = {}
+        for row in rows:
+            dims = json.loads(row["dims_json"])
+            if x not in dims or (y is not None and y not in dims):
+                continue          # a sample that carries no such label belongs in no cell
+            key = (dims[x],) if y is None else (dims[x], dims[y])
+            cells.setdefault(key, []).append(float(row["v"]))
+
+        def mean(values: Optional[list[float]]) -> Optional[float]:
+            return round(sum(values) / len(values), 4) if values else None
+
+        xs = sorted({k[0] for k in cells}, key=_sortable)
+        if y is None:
+            return {"x": xs, "v": [mean(cells.get((k,))) for k in xs],
+                    "n": [len(cells.get((k,), [])) for k in xs]}
+        ys = sorted({k[1] for k in cells}, key=_sortable)
+        return {"x": xs, "y": ys,
+                "z": [[mean(cells.get((xv, yv))) for xv in xs] for yv in ys],
+                "n": [[len(cells.get((xv, yv), [])) for xv in xs] for yv in ys]}
 
     def skipped(self, run_id: str) -> list[dict]:
         """Everything a run did not attempt, and why.
@@ -444,22 +480,6 @@ class Store:
             """SELECT evaluator, case_id, grp, dims_json, skipped
                FROM sample WHERE run_id=? AND skipped IS NOT NULL
                ORDER BY evaluator, case_id""", (run_id,))
-
-    def coding_breakdown(self, run_id: str) -> list[dict]:
-        return self._rows(
-            """SELECT json_extract(dims_json,'$.problem') AS problem,
-                      AVG(passed) AS pass_rate, COUNT(*) AS n
-               FROM sample WHERE run_id=? AND evaluator='coding' AND passed IS NOT NULL
-               GROUP BY problem ORDER BY problem""", (run_id,))
-
-    def throughput_by_context(self, run_id: str) -> list[dict]:
-        return self._rows(
-            """SELECT json_extract(dims_json,'$.context_len') AS context_len,
-                      AVG(tok_per_sec) AS tok_per_sec,
-                      AVG(server_gen_tps) AS server_gen_tps
-               FROM sample WHERE run_id=? AND evaluator='needle'
-                 AND tok_per_sec IS NOT NULL AND dims_json LIKE '%context_len%'
-               GROUP BY context_len ORDER BY CAST(context_len AS INTEGER)""", (run_id,))
 
     def capabilities(self, run_id: str) -> list[dict]:
         """One headline 0..1 score per evaluator, for a capability bar/radar.

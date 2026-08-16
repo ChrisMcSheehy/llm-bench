@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 
-from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict, View
 from llmbench.models import Sample
 from llmbench.registry import register
 from llmbench.resources import load_jsonl
@@ -70,6 +70,7 @@ class OneShotEvaluator(Evaluator):
     # Three decimal places because the per-sample build score has three; this figure is
     # their mean and gains no precision by being printed wider.
     breakdowns = [Breakdown("build_score", ("kind",), round_to=3)]
+    views = [View("bar", "build score by kind", x="kind")]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)

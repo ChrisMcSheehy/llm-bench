@@ -64,6 +64,11 @@
                  font-family:var(--mono);float:right;font-weight:400}
   .plot{width:100%;height:320px}
   .plot.tall{height:380px}
+  .vt{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+  .vt th{text-align:left;color:var(--dim);font-weight:600;padding:4px 8px;
+         border-bottom:1px solid var(--line);text-transform:uppercase;
+         letter-spacing:.08em;font-size:10px}
+  .vt td{padding:3px 8px;border-bottom:1px solid #1b262d;color:var(--ink)}
   .empty{color:var(--dim);font-family:var(--mono);font-size:12px;padding:40px 0;
          text-align:center}
   .eyebrow{font-family:var(--mono);font-size:11px;color:var(--dim);
@@ -116,9 +121,10 @@ async function boot(){
 }
 
 async function loadRun(id,r){
-  const [metrics,needle,coding,thr,cap,skipped]=await Promise.all([
-    j(`/api/run/${id}/metrics`), j(`/api/run/${id}/needle`),
-    j(`/api/run/${id}/coding`), j(`/api/run/${id}/throughput`),
+  // One request for every module's charts, whatever modules there are. This used to be
+  // three, one per evaluator that someone had wired up by hand.
+  const [metrics,views,cap,skipped]=await Promise.all([
+    j(`/api/run/${id}/metrics`), j(`/api/run/${id}/views`),
     j(`/api/run/${id}/capabilities`), j(`/api/run/${id}/skipped`)]);
   // The whole row, not just the value: every tile below shows the count beside it.
   const m=Object.fromEntries(metrics.filter(x=>x.dims_json==="{}")
@@ -166,24 +172,88 @@ async function loadRun(id,r){
     <div class="eyebrow">capabilities — headline score per test module</div>
     <div class="card"><h2>capability profile<span class="hint">0–1 · higher is better</span></h2>
       <div id="pCap" class="plot"></div></div>
-    <div class="eyebrow">retrieval — recall by context length × insertion depth</div>
-    <div class="card"><h2>needle heatmap<span class="hint">1.0 = code recalled</span></h2>
-      <div id="pNeedle" class="plot tall"></div></div>
     ${skipped.length?`<div class="card"><h2>not attempted<span class="hint">why a
       figure is missing, rather than a missing figure</span></h2>
       ${skipped.map(s=>`<div class="sub">${s.evaluator} · ${s.skipped}</div>`).join("")}
       </div>`:""}
-    <div class="grid">
-      <div class="card"><h2>throughput vs context<span class="hint">gen tok/s</span></h2>
-        <div id="pThr" class="plot"></div></div>
-      <div class="card"><h2>coding — pass rate by problem</h2>
-        <div id="pCode" class="plot"></div></div>
-    </div>
+    <!-- Every chart below is declared by the test module that produced it and drawn by
+         the generic renderers, so a new module gets a chart without this file being
+         touched (design E3). -->
+    <div class="eyebrow">per-module views — declared by each test module</div>
+    <div id="views"></div>
     <div class="eyebrow">regression — metric across runs (build / time)</div>
     <div class="card"><h2>trend<span class="hint">needle recall over runs</span></h2>
       <div id="pTrend" class="plot"></div></div>`;
 
-  drawCap(cap.scores); drawNeedle(needle); drawThr(thr); drawCode(coding); drawTrend();
+  drawCap(cap.scores); drawViews(views); drawTrend();
+}
+
+// ---- the five renderers -------------------------------------------------------
+//
+// One per view kind, chosen because they are what this dashboard already drew. A module
+// declares {kind, title, x, y}; nothing here knows which modules exist.
+
+function viewCard(v,i){
+  return `<div class="card"><h2>${v.evaluator} — ${v.title}
+    <span class="hint">${v.kind}</span></h2>
+    <div id="v${i}" class="plot${v.kind==="heatmap"?" tall":""}"></div></div>`;
+}
+
+function drawViews(views){
+  const host=document.getElementById("views");
+  if(!views?.length){host.innerHTML='<div class="card"><div class="empty">no module '+
+    'declared a view for this run</div></div>';return;}
+  host.innerHTML=views.map(viewCard).join("");
+  views.forEach((v,i)=>{
+    const el=document.getElementById("v"+i);
+    ({bar:drawBar,line:drawLine,heatmap:drawHeatmap,table:drawTable,
+      artifact:drawTable}[v.kind]||drawTable)(el,v);
+  });
+}
+
+// A cell nobody probed carries a null, not a zero — the store reports no measurement as
+// no measurement, and Plotly leaves a gap rather than drawing a confident dark square.
+function drawHeatmap(el,v){
+  const d=v.data;
+  Plotly.newPlot(el,[{z:d.z,x:d.x.map(x=>typeof x==="number"?fmtN(x):x),y:d.y.map(String),
+    type:"heatmap",colorscale:HEAT,zmin:0,zmax:1,xgap:2,ygap:2,customdata:d.n,
+    hovertemplate:`${v.x_label} %{x} · ${v.y_label} %{y}<br>%{z}<br>n = %{customdata}`+
+      "<extra></extra>",
+    colorbar:{thickness:10,len:.9,tickfont:{size:10}}}],
+    {...PL,xaxis:{...PL.xaxis,title:v.x_label,type:"category"},
+     yaxis:{...PL.yaxis,title:v.y_label,type:"category"}},CFG);
+}
+
+function drawBar(el,v){
+  const d=v.data;
+  // Sorted by value, so the failures gather at one end. With 168 coding problems the
+  // useful reading is the shape of the distribution, not which bar is third from the left.
+  const order=d.x.map((_,i)=>i).sort((a,b)=>(d.v[a]??0)-(d.v[b]??0));
+  const x=order.map(i=>String(d.x[i])), y=order.map(i=>d.v[i]), n=order.map(i=>d.n[i]);
+  Plotly.newPlot(el,[{x,y,type:"bar",
+    marker:{color:y.map(s=>s>=.8?TEAL:s>=.5?AMBER:"#e5646e")},
+    customdata:n,
+    hovertemplate:`${v.x_label} %{x}<br>%{y:.3f}<br>n = %{customdata}<extra></extra>`}],
+    {...PL,yaxis:{...PL.yaxis,range:[0,1.05]},
+     xaxis:{...PL.xaxis,title:v.x_label,tickangle:-30,
+            showticklabels:x.length<=40}},CFG);
+}
+
+function drawLine(el,v){
+  const d=v.data;
+  Plotly.newPlot(el,[{x:d.x.map(x=>typeof x==="number"?fmtN(x):String(x)),y:d.v,
+    mode:"lines+markers",line:{color:TEAL,width:2},marker:{size:7},customdata:d.n,
+    hovertemplate:`${v.x_label} %{x}<br>%{y:.3f}<br>n = %{customdata}<extra></extra>`}],
+    {...PL,yaxis:{...PL.yaxis,range:[0,1.05]},
+     xaxis:{...PL.xaxis,title:v.x_label,type:"category"}},CFG);
+}
+
+function drawTable(el,v){
+  const d=v.data;
+  el.innerHTML=`<table class="vt"><thead><tr><th>${v.x_label}</th><th>value</th>
+    <th>n</th></tr></thead><tbody>${d.x.map((x,i)=>
+      `<tr><td>${x}</td><td>${d.v[i]==null?"—":d.v[i].toFixed(3)}</td>
+       <td>${d.n[i]}</td></tr>`).join("")}</tbody></table>`;
 }
 
 function totalOf(metrics,name){
@@ -211,40 +281,6 @@ const kpi=(k,v,c="",u="",n)=>`<div class="kpi"><div class="k">${k}</div>
   <div class="n">${n===undefined?"&nbsp;":n===null?"n —":"n = "+n}</div></div>`;
 const pct=v=>v==null?"—":(v*100).toFixed(1)+"%";
 
-function drawNeedle(d){
-  const el=document.getElementById("pNeedle");
-  if(!d.lengths?.length){el.innerHTML='<div class="empty">no needle samples</div>';return;}
-  Plotly.newPlot(el,[{z:d.z,x:d.lengths.map(fmtN),y:d.depths.map(v=>v+"%"),
-    type:"heatmap",colorscale:HEAT,zmin:0,zmax:1,xgap:2,ygap:2,
-    customdata:d.n,
-    hovertemplate:"ctx %{x} · depth %{y}<br>recall %{z}<br>n = %{customdata}<extra></extra>",
-    colorbar:{thickness:10,len:.9,tickfont:{size:10}}}],
-    {...PL,xaxis:{...PL.xaxis,title:"context length",type:"category"},
-     yaxis:{...PL.yaxis,title:"depth",type:"category"}},CFG);
-}
-function drawThr(rows){
-  const el=document.getElementById("pThr");
-  if(!rows?.length){el.innerHTML='<div class="empty">no throughput data</div>';return;}
-  const x=rows.map(r=>fmtN(+r.context_len));
-  Plotly.newPlot(el,[
-    {x,y:rows.map(r=>r.tok_per_sec),name:"wall",mode:"lines+markers",
-     line:{color:TEAL,width:2},marker:{size:6}},
-    {x,y:rows.map(r=>r.server_gen_tps),name:"server",mode:"lines+markers",
-     line:{color:AMBER,width:1.5,dash:"dot"},marker:{size:5}}],
-    {...PL,legend:{orientation:"h",y:1.15,font:{size:10}},
-     xaxis:{...PL.xaxis,title:"context length",type:"category"},
-     yaxis:{...PL.yaxis,title:"tok/s"}},CFG);
-}
-function drawCode(rows){
-  const el=document.getElementById("pCode");
-  if(!rows?.length){el.innerHTML='<div class="empty">no coding samples</div>';return;}
-  Plotly.newPlot(el,[{x:rows.map(r=>r.problem),y:rows.map(r=>r.pass_rate),
-    type:"bar",marker:{color:rows.map(r=>r.pass_rate>=1?TEAL:r.pass_rate>0?AMBER:"#e5646e")},
-    text:rows.map(r=>"n="+r.n),textposition:"outside",textfont:{color:MUT,size:10},
-    hovertemplate:"%{x}<br>pass rate %{y}<br>n = %{text}<extra></extra>"}],
-    {...PL,yaxis:{...PL.yaxis,range:[0,1.1],title:"pass rate"},
-     xaxis:{...PL.xaxis,tickangle:-30}},CFG);
-}
 async function drawTrend(){
   const el=document.getElementById("pTrend");
   const d=await j("/api/trend?evaluator=needle&metric=score_mean");

@@ -11,7 +11,7 @@ JSONL item schema:
 from __future__ import annotations
 
 from llmbench.evaluators._extract import extract_final_number, numbers_equal
-from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict, View
 from llmbench.models import Sample
 from llmbench.registry import register
 from llmbench.resources import load_jsonl
@@ -31,6 +31,7 @@ class MathEvaluator(Evaluator):
     version = "1"
     default_config = _DEFAULTS
     breakdowns = [Breakdown("accuracy", ("type",))]
+    views = [View("bar", "accuracy by problem type", x="type")]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)
