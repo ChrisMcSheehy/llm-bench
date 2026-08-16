@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from llmbench.evaluators._extract import first_json
-from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict, View
 from llmbench.models import Sample
 from llmbench.registry import register
 
@@ -80,6 +80,7 @@ class StructuredEvaluator(Evaluator):
     version = "1"
     default_config = _DEFAULTS
     breakdowns = [Breakdown("pass_rate", ("task",))]
+    views = [View("bar", "pass rate by task", x="task")]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)

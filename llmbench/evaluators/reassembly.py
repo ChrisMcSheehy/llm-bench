@@ -50,7 +50,7 @@ from typing import Any, Optional
 
 from llmbench.evaluators._ladder import climb, context_ladder
 from llmbench.evaluators._sizing import CALIBRATION_PROBE, build_filler, chars_per_token
-from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict, View
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
 
@@ -109,6 +109,9 @@ class ReassemblyEvaluator(Evaluator):
     #: the name the other two ladder evaluators use, so the dashboard and the pooling
     #: rules already know it.
     breakdowns = [Breakdown("recall", ("context_len",))]
+    #: A line, because bit accuracy is a gradient - the shape of the decline is the
+    #: finding, and bars would hide it behind their own spacing.
+    views = [View("line", "bit accuracy by context length", x="context_len")]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)

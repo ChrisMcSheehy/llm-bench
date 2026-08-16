@@ -17,7 +17,7 @@ from __future__ import annotations
 import string
 
 from llmbench.evaluators._extract import extract_choice
-from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict, View
 from llmbench.models import Sample
 from llmbench.registry import register
 from llmbench.resources import load_jsonl
@@ -37,6 +37,7 @@ class MCQAEvaluator(Evaluator):
     version = "1"
     default_config = _DEFAULTS
     breakdowns = [Breakdown("accuracy", ("subject",))]
+    views = [View("bar", "accuracy by subject", x="subject")]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)

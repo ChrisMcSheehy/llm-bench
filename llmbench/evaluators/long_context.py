@@ -21,7 +21,7 @@ import re
 from typing import Any
 
 from llmbench.evaluators._extract import extract_final_number, numbers_equal
-from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict, View
 from llmbench.evaluators._ladder import climb, context_ladder
 from llmbench.evaluators._sizing import chars_per_token
 from llmbench.models import Sample
@@ -56,6 +56,8 @@ class LongContextEvaluator(Evaluator):
     # Recall per (task, rung): the two sub-tasks degrade at different distances, and one
     # figure covering both would hide which of them broke.
     breakdowns = [Breakdown("recall", ("task", "context_len"))]
+    views = [View("heatmap", "recall by task and context length",
+                  x="context_len", y="task")]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)

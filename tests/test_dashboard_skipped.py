@@ -32,10 +32,10 @@ def _store_with_a_skipped_rung(tmp_path) -> Store:
 def test_the_heatmap_leaves_the_unattempted_rung_out_rather_than_drawing_a_zero(tmp_path):
     """A skipped row has no depth, so including it also crashes the query."""
     store = _store_with_a_skipped_rung(tmp_path)
-    heat = store.needle_heatmap("r1")
+    heat = store.view_data("r1", "needle", x="context_len", y="depth_pct")
     store.close()
 
-    assert heat["lengths"] == [2048], f"an unattempted rung was drawn: {heat['lengths']}"
+    assert heat["x"] == [2048], f"an unattempted rung was drawn: {heat['x']}"
 
 
 def test_the_reason_is_available_for_the_run(tmp_path):

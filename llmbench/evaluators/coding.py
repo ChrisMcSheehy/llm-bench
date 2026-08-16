@@ -31,7 +31,7 @@ from typing import Any
 
 import yaml
 
-from llmbench.evaluators.base import EvalContext, Evaluator, Verdict
+from llmbench.evaluators.base import EvalContext, Evaluator, Verdict, View
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
 from llmbench.resources import data_path
@@ -120,6 +120,9 @@ class CodingEvaluator(Evaluator):
     name = "coding"
     version = "1"
     default_config = _DEFAULTS
+    #: 168 bars is a distribution rather than a list, which is the useful reading: how
+    #: many problems this configuration fails, not which one is third from the left.
+    views = [View("bar", "pass rate by problem", x="problem", value="passed")]
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)

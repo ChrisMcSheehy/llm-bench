@@ -542,7 +542,7 @@ Drop one file in `llmbench/evaluators/`. It's discovered automatically — no
 registration elsewhere:
 
 ```python
-from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict
+from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict, View
 from llmbench.models import Sample
 from llmbench.registry import register
 
@@ -552,6 +552,7 @@ class ShoutEval(Evaluator):
     version = "1"
     default_config = {"prompts": {"greeting": "Say hello.", "network": "Explain TCP."}}
     breakdowns = [Breakdown("accuracy", ("topic",))]   # one figure per topic
+    views = [View("bar", "accuracy by topic", x="topic")]  # and a chart of it
 
     async def evaluate(self, ctx: EvalContext) -> list[Sample]:
         cfg = self.resolve_config(ctx.config)
@@ -581,6 +582,10 @@ knowing, and all three exist so that a module is grading logic and nothing else:
   stating how many items it rests on. Override `aggregate()` only for something
   genuinely bespoke, and call `super()` when you do — `needle.py`'s effective-context
   figure is the example.
+- **`views` gets you a chart.** Declare `View("bar", "accuracy by subject",
+  x="subject")` and the dashboard draws it — no endpoint, no SQL, no HTML. Five
+  kinds: bar, line, heatmap, table, artifact. Each cell carries its own count, and
+  a cell nobody probed is drawn as a gap rather than as a zero.
 - **`load_jsonl` reads question files**, resolving "the bundled set" versus "the one
   the suite configured", and naming the file and line number when a line is malformed.
 
@@ -662,7 +667,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 582 automated checks across 49 files. Almost every one of them
+`llmbench` has 593 automated checks across 50 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 
