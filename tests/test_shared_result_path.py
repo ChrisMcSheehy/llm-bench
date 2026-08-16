@@ -116,6 +116,20 @@ def test_a_malformed_question_file_names_the_file_and_the_line(tmp_path):
         f"blank lines are skipped but still count towards the line number: {message}")
 
 
+def test_a_line_of_the_wrong_shape_is_refused_where_it_is_written(tmp_path):
+    """Valid JSON, wrong thing. A bare array on a line parses fine and then fails deep in
+    an evaluator as `it["question"]` on a list, naming framework code rather than the row
+    of the file that is wrong."""
+    f = tmp_path / "q.jsonl"
+    f.write_text('{"id": 1}\n["not", "an", "object"]\n', encoding="utf-8")
+
+    with pytest.raises(ValueError) as exc:
+        load_jsonl(str(f), "datasets", "mcqa.jsonl")
+
+    assert "line 2" in str(exc.value), str(exc.value)
+    assert "list" in str(exc.value), "the error did not say what it found instead"
+
+
 def test_the_loader_skips_blank_lines_and_honours_the_limit(tmp_path):
     f = tmp_path / "q.jsonl"
     f.write_text('{"id": 1}\n\n{"id": 2}\n{"id": 3}\n', encoding="utf-8")

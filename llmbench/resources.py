@@ -71,10 +71,19 @@ def load_jsonl(configured: Optional[str], *default_parts: str,
         if not line.strip():
             continue
         try:
-            items.append(json.loads(line))
+            item = json.loads(line)
         except json.JSONDecodeError as exc:
             raise ValueError(
                 f"{path}: line {lineno} is not valid JSON ({exc.msg}). Each line must be "
                 f"one complete JSON object; a question file is not a single JSON array."
             ) from exc
+        if not isinstance(item, dict):
+            # Valid JSON of the wrong shape. Left through, it reaches an evaluator as
+            # `it["question"]` on a list or a string, and the error names a line of
+            # framework code rather than the line of the file that is wrong.
+            raise ValueError(
+                f"{path}: line {lineno} is a JSON {type(item).__name__}, not an object. "
+                f"Each line must be one question, e.g. "
+                f'{{"id": "q1", "question": "...", "answer": "..."}}.')
+        items.append(item)
     return items[:limit] if limit else items
