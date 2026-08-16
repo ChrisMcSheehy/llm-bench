@@ -27,6 +27,11 @@ OpenRouter), and it will:
      ladder auto-derived from `n_ctx` (a 1M model → ~128k/256k/512k/1M).
    - `long_context` — RULER/MRCR-style multi-key retrieval (with distractors)
      and variable-tracking chains across the same ladder.
+   - `reassembly` — three labelled fragments of a generated hex key are planted at
+     three depths; the model must find all three and return them joined. Graded in
+     four tiers — parts found, order correct, **bit accuracy**, exact match — so a
+     degrading rung reports *how far*, not just that a line was crossed. A key of
+     the wrong length reports bit accuracy as a dash, never as a number.
 
    *Speed (two figures, because it is two operations):*
    - `speed` — reading the prompt and writing the answer, measured separately at
@@ -638,7 +643,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 355 automated checks across 46 files. Almost every one of them
+`llmbench` has 378 automated checks across 47 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 
