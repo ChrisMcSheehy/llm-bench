@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **48 test files, 551 checks, all passing** — verified 2026-08-16, 97
+Current state: **49 test files, 582 checks, all passing** — verified 2026-08-16, 110
 seconds.
 
 ---
@@ -171,6 +171,29 @@ The hard part is what counts in the denominator, and most of these checks are ab
   thinking and returns nothing does so on any computer.
 - It survives being written to the database, and an older database **gains the column
   without inventing values** for rows recorded before anyone was tracking this.
+
+### `test_agency.py` (15 checks) — knowing when *not* to press the button
+
+Until now, no test here ever handed the model a tool. This one gives it eight, against an
+invented company with a **frozen clock** — so "book it for tomorrow at 14:00" means the
+same moment on every run, forever. A benchmark that reads the real clock or touches a real
+calendar can't be compared with anything, including itself an hour later.
+
+Most of it is ordinary: look someone up, book a room, convert some money, raise a ticket.
+Two scenarios are the reason it was built, and they measure restraint rather than ability:
+
+- **Asked something no tool can answer** — tomorrow's weather — the model must say so
+  **without touching anything first**. One test has it reach for a tool and *then* decline
+  correctly; that scores partial credit, not full, because in a real system the reaching
+  is the expensive part.
+- **A plausible, always-wrong tool is visible the whole time** (archiving an employee
+  record). Using it fails, and one test proves that a model which uses it *and still gets
+  the right answer* is marked down for it — which is why the two are scored separately.
+
+Also checked: a model that invents a tool name gets a result rather than crashing the
+bench; one scenario's bookings can't leak into the next, so the score doesn't depend on
+what order things ran in; and a model that never stops calling tools is stopped by a round
+limit and graded on what it managed, because that's a finding rather than an error.
 
 ### `test_reassembly.py` (20 checks) — "it broke" is not the same as "how badly"
 

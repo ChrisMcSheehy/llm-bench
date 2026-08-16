@@ -81,6 +81,43 @@ class Breakdown:
 Grader = Callable[[GenResult], Union[Verdict, Awaitable[Verdict]]]
 
 
+@dataclass(frozen=True)
+class Conversation:
+    """A finished exchange, for a grader that has to judge more than the last reply.
+
+    A tool-using scenario is scored on what the model *did* as much as on what it finally
+    said — which tool it reached for, whether it reached for one at all — so the grader
+    gets every round rather than only the answer.
+    """
+
+    rounds: list[GenResult]
+    #: Every message sent and received, in order, including the tool results.
+    messages: list[dict[str, str]]
+
+    @property
+    def replies(self) -> list[str]:
+        return [r.text for r in self.rounds]
+
+    @property
+    def final(self) -> str:
+        """The model's last word, which is where an answer lives if there is one."""
+        return self.rounds[-1].text if self.rounds else ""
+
+
+#: Given a reply, the messages to send back - a tool's output - or None to end the
+#: exchange. Sync or async, for the same reason as `Grader`.
+Responder = Callable[[GenResult],
+                     Union[Optional[list[dict[str, str]]],
+                           Awaitable[Optional[list[dict[str, str]]]]]]
+
+ConversationGrader = Callable[[Conversation], Union[Verdict, Awaitable[Verdict]]]
+
+
+async def _resolve(value):
+    """Await `value` if it needs awaiting. One rule for graders and responders alike."""
+    return await value if inspect.isawaitable(value) else value
+
+
 class Evaluator(abc.ABC):
     name: str = ""
     version: str = "0"
@@ -149,6 +186,62 @@ class Evaluator(abc.ABC):
             input_tokens=res.input_tokens, output_tokens=res.output_tokens,
             latency_ms=res.latency_ms, tok_per_sec=res.tok_per_sec,
             server_prompt_tps=res.server_prompt_tps, server_gen_tps=res.server_gen_tps,
+        )
+
+    async def run_conversation(self, ctx: EvalContext, *, case_id: str,
+                               messages: list[dict[str, str]], respond: Responder,
+                               grade: ConversationGrader,
+                               group: Optional[str] = None,
+                               dims: Optional[dict[str, Any]] = None,
+                               max_rounds: int = 6, **gen: Any) -> Sample:
+        """Hold a bounded exchange with the model and return one finished Sample.
+
+        `run_case` covers one question and one answer, which is every module here except a
+        tool-using one: there the model asks for a tool, something runs it, the result goes
+        back, and only then does an answer arrive. `respond(result)` returns the messages
+        to send next — a tool's output — or None when the exchange is over. `grade` then
+        judges the whole `Conversation` rather than a single reply.
+
+        **No per-token speed is recorded, deliberately.** Token counts and latency are
+        summed across rounds, because that is what the exchange cost. A tokens-per-second
+        figure over a multi-round conversation would divide generated tokens by a duration
+        that includes reading every intermediate tool result, which is the blended figure
+        design B3 removed from this project — and taking one round's figure instead would
+        report whichever round happened to be last. `speed` is where speed is measured.
+
+        `max_rounds` bounds a model that never stops calling tools. Hitting the bound is
+        **not** an error: the conversation is graded as it stands, and a scenario the model
+        talked itself out of is a result about the model.
+        """
+        where = {"evaluator": self.name, "case_id": case_id, "group": group,
+                 "dims": dims or {}}
+        history = list(messages)
+        rounds: list[GenResult] = []
+
+        for _ in range(max_rounds):
+            try:
+                res = await ctx.generate(history, **gen)
+            except Exception as exc:
+                return Sample(**where, error=repr(exc))
+            if res.unusable_reason:
+                # Nothing usable came back, so there is no exchange to grade. Counted
+                # against the answer rate exactly as in run_case.
+                return Sample(**where, skipped=res.unusable_reason, answered=False)
+
+            rounds.append(res)
+            history = history + [{"role": "assistant", "content": res.text}]
+            follow_up = await _resolve(respond(res))
+            if not follow_up:
+                break
+            history = history + list(follow_up)
+
+        verdict = await _resolve(grade(Conversation(rounds=rounds, messages=history)))
+        return Sample(
+            **where, score=verdict.score, passed=verdict.passed, meta=verdict.meta,
+            answered=True,
+            input_tokens=sum(r.input_tokens or 0 for r in rounds) or None,
+            output_tokens=sum(r.output_tokens or 0 for r in rounds) or None,
+            latency_ms=sum(r.latency_ms for r in rounds),
         )
 
     # Default aggregation: overall score + pass-rate + throughput + failure counts, plus

@@ -33,6 +33,16 @@ OpenRouter), and it will:
      degrading rung reports *how far*, not just that a line was crossed. A key of
      the wrong length reports bit accuracy as a dash, never as a number.
 
+   *Tool use:*
+   - `agency` — a simulated company, eight simulated tools and a **frozen clock**,
+     so "book it tomorrow at 14:00" resolves to the same instant on every run
+     forever. Scored per *check*, not per scenario. Two of the checks are the
+     reason it exists: **restraint** (asked something no tool can answer, the model
+     must decline without calling anything) and **focus** (a plausible,
+     always-wrong tool is visible throughout; using it fails). The expensive
+     failure of a tool-using model isn't failing to act — it's acting when it
+     shouldn't have, confidently.
+
    *Speed (two figures, because it is two operations):*
    - `speed` — reading the prompt and writing the answer, measured separately at
      stated prompt sizes (~64 / 512 / 2k / 4k / 8k). One warm-up discarded, three
@@ -652,7 +662,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 551 automated checks across 48 files. Almost every one of them
+`llmbench` has 582 automated checks across 49 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 

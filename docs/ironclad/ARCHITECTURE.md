@@ -128,6 +128,28 @@ docs/ironclad/  design docs, plans, lessons
   generated, because `store.py`'s `QUALITY_METRICS` reads those names to decide what may
   be pooled across machines. `coding` keeps its own loop: its buckets already exist for
   `pass@k`, and deriving the same figures twice by two rules would let them disagree.
+- **2026-08-16 — a multi-round exchange is a sibling of `run_case`, not a special case of
+  it.** `Evaluator.run_conversation` drives a bounded tool-calling conversation and
+  returns one Sample (design B4). It sums tokens and latency across rounds and records
+  **no per-token speed at all**: a rate over a conversation divides generated tokens by a
+  duration that includes reading every intermediate tool result, which is exactly the
+  blended figure B3 removed, and taking one round's rate instead would report whichever
+  round happened to be last. `tests/test_shared_result_path.py` asserts the absence rather
+  than tolerating it, so it stays a decision. Hitting the round bound is not an error: the
+  exchange is graded as it stands, because a model that talked itself out of a scenario
+  has told you something about the model.
+- **2026-08-16 — tool use is measured against a simulated company with a frozen clock.**
+  `evaluators/_office.py` holds an invented company and pure-function tools; `agency.py`
+  holds the protocol, the scenarios and the scoring (design B4). Everything here rests on
+  results being comparable across runs, and a tool benchmark touching a real calendar,
+  clock or network is comparable with nothing, including itself an hour later. **The unit
+  is the check**, settled at sign-off: the scenario is a dimension, so a per-skill figure
+  falls out of the shared aggregation, and a four-check scenario is worth four. Tools are
+  described in the prompt and answered in JSON rather than through a native tool API, so
+  this measures the model on any backend rather than measuring which backends have
+  function calling. **Restraint and focus are scored explicitly** because the expensive
+  failure of a tool-using model in practice is not failing to act, it is acting when it
+  should not have.
 - **2026-08-16 — HumanEval is 164 committed problem directories, not a second harness.**
   Converted once into this project's existing `problem.yaml` + `tests.py` + `solution.py`
   format and committed; the converter is not shipped (design B1). The existing harness
