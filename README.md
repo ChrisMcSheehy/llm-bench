@@ -289,11 +289,47 @@ servers:
              "-ctk", "q8_0", "-ctv", "q8_0"]
 ```
 
-**There is deliberately no shared-defaults mechanism yet**, so every profile
-repeats the flags it has in common. That keeps what reaches the fingerprint a
-resolved argument list rather than a template — but it does mean a large set is
-better generated than hand-maintained. If you keep hundreds of profiles, write
-them from a script rather than by hand until defaults and path interpolation land.
+### Shared defaults and path variables
+
+A set of any size is mostly the same eight lines over and over, so a `defaults`
+block carries the parts that repeat:
+
+```yaml
+defaults:
+  args: ["-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0"]
+  vars:
+    models: C:/models
+    builds: C:/builds
+
+servers:
+  vulkan-b10441:
+    binary: "{builds}/llama-b10441/llama-server.exe"
+    model:  "{models}/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
+    args:   ["-ngl", "99", "-c", "65536"]
+
+  partial-offload:                       # the usual settings, except this one
+    binary: "{builds}/llama-b10441/llama-server.exe"
+    model:  "{models}/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
+    args:   ["-ngl", "24", "-c", "65536"]
+```
+
+`{name}` is replaced from `defaults.vars`, so moving your model folder is one
+edit rather than three hundred. A name with no value is an error naming it and
+the profile — left as a literal it would surface later as a missing file, which
+blames the disk for a typo. Braces that aren't a plain `{identifier}` are left
+alone, so a Jinja chat template can be passed as an argument.
+
+**A profile's own arguments come last and win**, because llama.cpp takes the
+later of two conflicting flags — that is what "the usual settings, except this"
+has to mean. A profile that restates a default carries the flag twice; that is
+the command line that really ran, and both llama.cpp and the fingerprint read the
+last occurrence.
+
+Both are resolved when the file is read, so what reaches the launcher is a real
+path and what reaches the fingerprint is a complete argument list — never a
+template. **A profile that inherits `-fa on` and one that states it are the same
+configuration and file under the same identity**, so tidying your profile file
+never forks a configuration's history.
 
 ```bash
 llmbench servers          # what is defined, and what is running
@@ -602,7 +638,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 346 automated checks across 46 files. Almost every one of them
+`llmbench` has 355 automated checks across 46 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 
