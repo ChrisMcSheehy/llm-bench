@@ -65,6 +65,21 @@
     layer splits, be told apart in the leaderboard.
   </p>
   <div id="list"></div>
+
+  <h2 style="font-size:12px;text-transform:uppercase;letter-spacing:.12em;
+             color:#7d8f9a;margin:30px 0 10px">run a suite</h2>
+  <p class="intro">
+    Pick a suite and, optionally, a profile to start it against. Both are chosen from
+    what already exists on disk &mdash; this page can name a suite, never write one.
+  </p>
+  <div class="card" style="padding:14px 16px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select id="suite"></select>
+      <select id="profile"></select>
+      <button id="go">start run</button>
+      <span id="runstate" class="sub"></span>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -147,9 +162,48 @@ function empty() {
 async function refresh() {
   const servers = await api("/api/servers");
   list.replaceChildren(...(servers.length ? servers.map(card) : [empty()]));
+  const profile = document.getElementById("profile");
+  profile.innerHTML = '<option value="">no profile (use the suite\'s own targets)</option>'
+    + servers.map(s => `<option value="${esc(s.name)}">${esc(s.name)}</option>`).join("");
 }
 
-refresh();
+// The request carries two names and nothing else — see design B6. A suite body would
+// name targets, and a target is an address and an argument list.
+async function startRun() {
+  const suite = document.getElementById("suite").value;
+  const server = document.getElementById("profile").value || null;
+  const state = document.getElementById("runstate");
+  state.textContent = "starting…";
+  try {
+    const r = await fetch("/api/run", {method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({suite, server})});
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.detail || r.statusText);
+    pollRun();
+  } catch (e) { state.textContent = "could not start: " + e.message; }
+}
+
+async function pollRun() {
+  const state = document.getElementById("runstate");
+  const s = await api("/api/run/active");
+  state.textContent = s.status === "running"
+    ? `running ${s.suite}${s.server ? " on " + s.server : ""}…`
+    : s.status === "error" ? "failed: " + s.error
+    : s.status === "done" ? `finished — ${s.runs.length} run(s) stored` : "";
+  if (s.status === "running") setTimeout(pollRun, 3000);
+}
+
+async function boot() {
+  await refresh();
+  const suites = await api("/api/suites");
+  document.getElementById("suite").innerHTML =
+    suites.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  document.getElementById("go").onclick = startRun;
+  pollRun();
+}
+
+boot();
 </script>
 </body>
 </html>

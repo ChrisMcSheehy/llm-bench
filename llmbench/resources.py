@@ -12,6 +12,7 @@ than one that crashes, because the output still looks valid.
 from __future__ import annotations
 
 import json
+import re
 from importlib.resources import files
 from pathlib import Path
 from typing import Any, Optional
@@ -48,6 +49,54 @@ def resolve_data_file(configured: Optional[str], *default_parts: str) -> Path:
             )
         return chosen
     return data_path(*default_parts)
+
+
+#: A suite name the dashboard is allowed to ask for. Letters, digits, dash, underscore -
+#: no dots and no separators, so no name can climb out of the directories below.
+_SUITE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def suites_dir() -> Path:
+    """Where a user's own suites live, beside the database and the profiles file."""
+    return Path.home() / ".llmbench" / "suites"
+
+
+def available_suites() -> dict[str, Path]:
+    """Suite name -> file, for every suite that already exists on disk.
+
+    Bundled ones first, then the user's own, so a personal `default.yaml` shadows the
+    packaged one - which is the way round people expect.
+    """
+    found: dict[str, Path] = {}
+    for directory in (data_path("suites"), suites_dir()):
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.glob("*.yaml")):
+            if _SUITE_NAME.match(path.stem):
+                found[path.stem] = path
+    return found
+
+
+def resolve_suite(name: str) -> Path:
+    """The file for a suite *name*, or a refusal (design B6, restating L1).
+
+    The dashboard may name a suite; it may never supply one. A name is checked against a
+    pattern before it is used and then looked up in a listing of files that already exist,
+    so the set of things the web layer can run stays exactly the set the user wrote to
+    disk. A browser that could post a path - or a suite body, which names targets, and a
+    target is an address and an argument list - would hand back everything decision L1
+    withheld when it stopped the browser choosing which binary runs.
+    """
+    if not _SUITE_NAME.match(name or ""):
+        raise ValueError(
+            f"{name!r} is not a suite name. Names are letters, digits, dashes and "
+            f"underscores - never a path.")
+    suites = available_suites()
+    if name not in suites:
+        raise ValueError(
+            f"no suite named {name!r}. Available: {sorted(suites) or 'none'}. "
+            f"Put your own in {suites_dir()}.")
+    return suites[name]
 
 
 def load_jsonl(configured: Optional[str], *default_parts: str,

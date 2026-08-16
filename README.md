@@ -380,6 +380,18 @@ pull request.
 > executable and its arguments would be a way to run anything on the machine hosting the
 > dashboard, so the set of things that may run lives in a file only you can edit.
 
+### Starting a run from the dashboard
+
+**/servers** also has a control to start a whole suite, optionally against a launch
+profile. The same rule applies for the same reason: the browser sends **a suite
+name and a profile name**, never a path, an argument or a suite body. A suite lists
+targets, and a target is an address plus an argument list — so accepting one would
+hand back everything the profiles allowlist withholds.
+
+Suites are found by name in the bundled set and in `~/.llmbench/suites/`, with
+yours shadowing a bundled one of the same name. One run at a time: two model
+servers sharing a graphics card contend for it and corrupt the speed figures.
+
 ## Install
 
 ```bash
@@ -667,7 +679,7 @@ uvicorn. The coding evaluator additionally needs pytest (`[exec]` extra).
 
 ## The test suite
 
-`llmbench` has 593 automated checks across 50 files. Almost every one of them
+`llmbench` has 608 automated checks across 51 files. Almost every one of them
 guards a real defect that really happened — most test files open by describing
 it, with the date.
 

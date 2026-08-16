@@ -5,15 +5,18 @@ JSON endpoints the frontend consumes:
   GET /api/runs
   GET /api/configurations
   GET /api/run/{run_id}/metrics
-  GET /api/run/{run_id}/needle
+  GET /api/run/{run_id}/views      every chart every module declared (design E3)
   GET /api/run/{run_id}/skipped
-  GET /api/run/{run_id}/coding
-  GET /api/run/{run_id}/throughput
   GET /api/trend?evaluator=needle&metric=score_mean
+  GET /api/suites                  suite names the browser may ask for
+  POST /api/run                    {suite, server} - names only, never bodies (design B6)
 """
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -21,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 from llmbench import launcher
 from llmbench.registry import available, get
+from llmbench.resources import available_suites, resolve_suite
 from llmbench.store import Store, default_db_path
 
 app = FastAPI(title="llmbench")
@@ -243,6 +247,96 @@ def arena_leaderboard():
 # list: that would let a web page run an arbitrary program on this machine. The
 # profiles file on disk is the allowlist, and these endpoints only ever look a name up
 # in it. See docs/ironclad/DESIGN-launcher.md, decision L1.
+
+# ---- starting a run from the browser (design B6) ------------------------------------
+#
+# The browser may post **a suite name and a profile name**, and nothing else. Not a
+# prompt, not a path, not an argument, not a suite body. This is decision L1 restated for
+# a second verb and for the same reason: L1 stops the browser choosing which binary runs,
+# and a run trigger that accepted a suite body would hand all of that back, because a
+# suite names targets and a target is an address and an argument list.
+#
+# One run at a time, which is also why the sweep never starts two servers at once: two
+# servers sharing a graphics card contend for it and corrupt the speed figures.
+
+class RunRequest(BaseModel):
+    suite: str
+    server: Optional[str] = None
+    # Anything else is rejected rather than ignored. Silently dropping an unexpected
+    # field is how a request that meant to smuggle something gets a success back.
+    model_config = {"extra": "forbid"}
+
+
+_RUN_STATE: dict[str, Any] = {"status": "idle", "suite": None, "server": None,
+                              "started_at": None, "finished_at": None, "error": None,
+                              "runs": []}
+
+
+@app.get("/api/suites")
+def suites():
+    """The suites that exist on disk, by name. The browser picks from these."""
+    return sorted(available_suites())
+
+
+@app.get("/api/run/active")
+def active_run():
+    return _RUN_STATE
+
+
+async def _execute(suite_path: Path, profile_name: Optional[str]) -> None:
+    """Run a suite, optionally against a launched profile, recording state as it goes.
+
+    The target spec is built exactly as `cli._sweep` builds it, including `binary`: only
+    the binary can report which graphics cards a run used, and we have it precisely
+    because we started the server ourselves.
+    """
+    from llmbench.orchestrator import Orchestrator
+
+    s = Store(str(default_db_path()))
+    try:
+        orchestrator = Orchestrator(s)
+        if profile_name:
+            profile = launcher.load_profiles()[profile_name]
+            # `launched` stops the server however this block exits. A server left running
+            # would hold the graphics card against every run after it.
+            with launcher.launched(profile) as server:
+                results = await orchestrator.run_suite(
+                    str(suite_path),
+                    target_specs=[{"engine": "llama.cpp", "base_url": server.base_url,
+                                   "known_args": server.launch_args,
+                                   "binary": server.profile.binary}])
+        else:
+            results = await orchestrator.run_suite(str(suite_path))
+        _RUN_STATE.update(status="done", finished_at=_now(),
+                          runs=[r.run_id for r in results])
+    except Exception as exc:
+        # Reported rather than raised: nothing is awaiting this task, so an exception
+        # would vanish into the event loop and the dashboard would show "running" forever.
+        _RUN_STATE.update(status="error", finished_at=_now(), error=repr(exc))
+    finally:
+        s.close()
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+@app.post("/api/run")
+async def start_run(req: RunRequest):
+    if _RUN_STATE["status"] == "running":
+        raise HTTPException(409, "a run is already in progress")
+    try:
+        suite_path = resolve_suite(req.suite)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if req.server is not None and req.server not in launcher.load_profiles():
+        raise HTTPException(404, f"no launch profile named {req.server!r}")
+
+    _RUN_STATE.update(status="running", suite=req.suite, server=req.server,
+                      started_at=_now(), finished_at=None, error=None, runs=[])
+    asyncio.create_task(_execute(suite_path, req.server))
+    return _RUN_STATE
+
 
 @app.get("/api/servers")
 def servers():
