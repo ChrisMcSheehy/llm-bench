@@ -41,7 +41,7 @@ really happened**, with the date. These are not hypothetical tests. Each one is 
 
 (On macOS or Linux the path is `.venv/bin/python`.)
 
-Current state: **46 test files, 346 checks, all passing** — verified 2026-08-15, 75
+Current state: **46 test files, 355 checks, all passing** — verified 2026-08-15, 75
 seconds.
 
 ---
@@ -305,7 +305,7 @@ and partial runs are counted openly rather than hidden.
 Being able to launch the server is what makes the whole identity problem solvable: **a
 bench that starts the server knows the settings, because it supplied them.**
 
-### `test_launcher_profiles.py` (8 checks) — the list of things allowed to run
+### `test_launcher_profiles.py` (18 checks) — the list of things allowed to run
 
 You describe the servers you want to be startable in a file (`~/.llmbench/servers.yaml`).
 That file is also a **security allowlist**: the web dashboard may ask to start a profile
@@ -317,6 +317,24 @@ no profiles" rather than an error (most people never make one), a broken profile
 itself in the error, and — a nice detail — writing your arguments as one long string
 instead of a list is **refused**, because splitting on spaces would mangle any path
 containing a space, which on Windows is the normal case.
+
+The rest cover **shared settings**. Anyone testing seriously ends up with dozens of these
+profiles, almost identical, and copies that are almost identical drift apart. So a
+`defaults` block holds the parts that repeat, and `{models}` style shortcuts stand in for
+long folder paths:
+
+- A profile's **own settings win** over the shared ones — "the usual, except this" only
+  works if the exception is applied last. One check proves that a profile asking for a
+  different graphics-card split really gets its own value.
+- Shortcuts are **filled in when the file is read**, so what reaches the rest of the
+  program is a real path and a finished command line, never a half-written one.
+- The one that matters most: a profile that **inherits** a setting and one that
+  **spells it out** are recognised as *the same setup*. Otherwise tidying up your own
+  profile file would split a configuration's history in two and nothing would say why.
+- A shortcut with **no value defined** is an error that names it. Left alone it would
+  turn up later as a missing file, which blames the disk for a typing mistake.
+- Braces that aren't a shortcut — a chat template, which is full of them — are **left
+  untouched**.
 
 ### `test_launcher.py` (11 checks) — really starting, really stopping
 

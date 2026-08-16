@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -104,11 +105,61 @@ def profiles_path() -> Path:
     return Path.home() / ".llmbench" / "servers.yaml"
 
 
+#: A `{name}` placeholder. Restricted to an identifier so that braces used for other
+#: purposes - a Jinja chat template passed as an argument, say - are left alone.
+_VAR = re.compile(r"\{([A-Za-z_][A-Za-z0-9_-]*)\}")
+
+
+def _interpolate(text: str, variables: dict[str, str], where: str) -> str:
+    """Replace `{name}` with the value declared under `defaults.vars` (design B7).
+
+    An undefined name is an error rather than a literal left in place. A path reading
+    `{modles}/model.gguf` would otherwise reach the launcher, fail at the operating
+    system, and be reported as a missing file - blaming the disk for a typo.
+    """
+    def replace(match: re.Match) -> str:
+        key = match.group(1)
+        if key not in variables:
+            raise ValueError(
+                f"{where}: no value for {{{key}}}. Declare it under `defaults.vars`, or "
+                f"remove the placeholder. Known: {sorted(variables) or 'none'}")
+        return str(variables[key])
+
+    return _VAR.sub(replace, text)
+
+
 def load_profiles(path: Optional[str] = None) -> dict[str, Profile]:
     """Read the profiles file. A file that does not exist means no profiles, not an error.
 
     Most users have never created one, and starting the dashboard should not fail because
     of it.
+
+    Two features exist so that a large set stays maintainable rather than being the same
+    eight lines copied two hundred times (design B7)::
+
+        defaults:
+          args: ["-fa", "on"]
+          vars: {models: C:/models}
+
+        servers:
+          vulkan:
+            binary: C:/builds/llama-server.exe
+            model:  "{models}/Qwen3.6-35B-UD-Q4_K_M.gguf"
+            args:   ["-ngl", "99"]
+
+    **Both are resolved here, at load time.** What leaves this function is a real path and
+    a complete argument list, so nothing downstream - least of all the fingerprint - ever
+    sees a template. A profile inheriting `-fa on` and one stating it are the same
+    configuration and must hash identically.
+
+    **The profile's own arguments come last**, because llama.cpp lets a later flag
+    override an earlier one, so that is what "the default, except here" has to mean.
+
+    A profile that restates a default therefore carries the flag twice, and that is left
+    alone deliberately. The resolved list is the command line that really ran, llama.cpp
+    takes the last occurrence, and `targets.llamacpp._parse_args` reads it the same way -
+    so the two agree. Deduplicating would need a table of which flags take a value and
+    which stand alone, and a wrong entry in that table drops a setting in silence.
     """
     p = Path(path) if path else profiles_path()
     if not p.exists():
@@ -118,6 +169,15 @@ def load_profiles(path: Optional[str] = None) -> dict[str, Profile]:
     if not isinstance(servers, dict):
         raise ValueError(f"{p}: 'servers' must be a mapping of name to profile")
 
+    defaults = data.get("defaults") or {}
+    if not isinstance(defaults, dict):
+        raise ValueError(f"{p}: 'defaults' must be a mapping with 'args' and/or 'vars'")
+    default_args = _arg_list(defaults.get("args"), f"{p}: defaults")
+    variables = defaults.get("vars") or {}
+    if not isinstance(variables, dict):
+        raise ValueError(f"{p}: 'defaults.vars' must be a mapping of name to value")
+    variables = {str(k): str(v) for k, v in variables.items()}
+
     out: dict[str, Profile] = {}
     for name, body in servers.items():
         if not isinstance(body, dict):
@@ -125,21 +185,28 @@ def load_profiles(path: Optional[str] = None) -> dict[str, Profile]:
         for required in ("binary", "model"):
             if not body.get(required):
                 raise ValueError(f"{p}: profile {name!r} has no {required!r}")
-        args = body.get("args") or []
-        if not isinstance(args, list):
-            # Splitting a string on spaces would mangle any quoted path, and a path with
-            # a space in it is the normal case on Windows.
-            raise ValueError(
-                f"{p}: profile {name!r} has 'args' as {type(args).__name__}; "
-                "it must be a list, e.g. [\"-ngl\", \"99\"]")
+        where = f"{p}: profile {name!r}"
+        args = default_args + _arg_list(body.get("args"), where)
         out[name] = Profile(
             name=name,
-            binary=str(body["binary"]),
-            model=str(body["model"]),
-            args=[str(a) for a in args],
+            binary=_interpolate(str(body["binary"]), variables, where),
+            model=_interpolate(str(body["model"]), variables, where),
+            args=[_interpolate(a, variables, where) for a in args],
             port=int(body["port"]) if body.get("port") else None,
         )
     return out
+
+
+def _arg_list(args, where: str) -> list[str]:
+    if args is None:
+        return []
+    if not isinstance(args, list):
+        # Splitting a string on spaces would mangle any quoted path, and a path with
+        # a space in it is the normal case on Windows.
+        raise ValueError(
+            f"{where} has 'args' as {type(args).__name__}; "
+            "it must be a list, e.g. [\"-ngl\", \"99\"]")
+    return [str(a) for a in args]
 
 
 def free_port() -> int:

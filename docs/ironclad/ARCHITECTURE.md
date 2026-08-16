@@ -128,6 +128,19 @@ docs/ironclad/  design docs, plans, lessons
   generated, because `store.py`'s `QUALITY_METRICS` reads those names to decide what may
   be pooled across machines. `coding` keeps its own loop: its buckets already exist for
   `pass@k`, and deriving the same figures twice by two rules would let them disagree.
+- **2026-08-15 — launch profiles resolve their defaults and variables at load time.**
+  `load_profiles` merges `defaults.args` ahead of each profile's own and substitutes
+  `{name}` from `defaults.vars` (design B7), so what leaves the loader is a real path and
+  a complete argument list and nothing downstream ever sees a template. This is what keeps
+  criterion 9 true: a profile inheriting `-fa on` and one stating it are the same
+  configuration and must hash identically. A restated flag appears twice and is left that
+  way — the resolved list is the command line that really ran, llama.cpp takes the last
+  occurrence and `_parse_args` overwrites on each, so the two agree. Deduplicating would
+  need a table of which flags carry a value and which stand alone, and a wrong entry there
+  drops a setting silently. An undefined `{name}` raises rather than passing through: as a
+  literal it would be reported later as a missing file, blaming the disk for a typo. Only
+  `{identifier}` counts as a placeholder, so a Jinja chat template survives being passed
+  as an argument.
 - **2026-08-15 — how often the model answered is recorded as a fact, not inferred from a
   string.** `Sample.answered` is True when a gradable response arrived, False when the
   model was asked and produced nothing usable, and None when it was never successfully
