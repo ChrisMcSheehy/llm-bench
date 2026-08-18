@@ -286,5 +286,6 @@ class AgencyEvaluator(Evaluator):
         total = sum(s.meta.get("checks_total", 0) for s in graded)
         if total:
             metrics.append(Metric(evaluator=self.name, name="check_pass_rate",
-                                  value=round(met / total, 4), n=total))
+                                  value=round(met / total, 4), n=total,
+                                  successes=met))
         return metrics

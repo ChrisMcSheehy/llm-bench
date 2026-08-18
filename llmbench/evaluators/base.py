@@ -157,6 +157,34 @@ async def _resolve(value):
     return await value if inspect.isawaitable(value) else value
 
 
+def _successes(values) -> Optional[int]:
+    """The count of successes, when these values are a proportion — else None.
+
+    A list whose every element is exactly zero or one is a count dressed as a mean, and
+    its numerator is the sum. Anything else is a continuous mean (reassembly's bit
+    accuracy), or a count over a larger range (its `parts_found`, which runs 0..3), and
+    has no numerator to report (design C1).
+
+    This is decided here, and not by a list of metric names in the store, because the
+    name is not enough to decide it: `score_mean` is produced below for every module, and
+    it is a proportion for `mcqa` and a continuous mean for `reassembly`. The aggregator
+    holds the values, so the aggregator is the only place that can answer.
+
+    An empty list returns None, not 0. No measurements is an absence, not a measurement
+    of none — the same rule D3 set for a skipped rung.
+
+    A continuous score can land on all zeros and ones by coincidence, and is then read as
+    a proportion. The resulting interval is a true statement about the rate of perfect
+    scores and numerically identical to the mean, so the misreading degrades into a
+    slightly different question rather than into a wrong number.
+    """
+    if not values:
+        return None
+    if all(v in (0, 0.0, 1, 1.0) for v in values):
+        return int(sum(values))
+    return None
+
+
 class Evaluator(abc.ABC):
     name: str = ""
     version: str = "0"
@@ -304,12 +332,12 @@ class Evaluator(abc.ABC):
         if scores:
             metrics.append(Metric(evaluator=self.name, name="score_mean",
                                   value=round(statistics.mean(scores), 4),
-                                  n=len(scores)))
+                                  n=len(scores), successes=_successes(scores)))
         passes = [s.passed for s in graded if s.passed is not None]
         if passes:
             metrics.append(Metric(evaluator=self.name, name="pass_rate",
                                   value=round(sum(passes) / len(passes), 4),
-                                  n=len(passes)))
+                                  n=len(passes), successes=_successes(passes)))
         # No throughput figure here, deliberately (design B3). `tok_per_sec` is output
         # tokens over *total* wall time, so it includes reading the prompt - and a mean of
         # it across a context ladder is dominated by the prompt size it does not mention.
@@ -328,7 +356,8 @@ class Evaluator(abc.ABC):
         asked = [s.answered for s in samples if s.answered is not None]
         if asked:
             metrics.append(Metric(evaluator=self.name, name="answer_rate",
-                                  value=round(sum(asked) / len(asked), 4), n=len(asked)))
+                                  value=round(sum(asked) / len(asked), 4), n=len(asked),
+                                  successes=_successes(asked)))
 
         # Reported unconditionally, including when nothing was graded. The old early
         # return meant an evaluator whose every sample failed produced no metrics at
@@ -355,5 +384,6 @@ class Evaluator(abc.ABC):
                 metrics.append(Metric(
                     evaluator=self.name, name=spec.metric,
                     value=round(statistics.mean(values), spec.round_to),
-                    n=len(values), dims=dict(zip(spec.by, key))))
+                    n=len(values), successes=_successes(values),
+                    dims=dict(zip(spec.by, key))))
         return metrics

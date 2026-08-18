@@ -224,5 +224,5 @@ class CodingEvaluator(Evaluator):
         for pid, v in sorted(by_prob.items()):
             metrics.append(Metric(evaluator=self.name, name="problem_pass_rate",
                                   value=round(sum(v) / len(v), 4), n=len(v),
-                                  dims={"problem": pid}))
+                                  successes=sum(v), dims={"problem": pid}))
         return metrics

@@ -50,7 +50,8 @@ from typing import Any, Optional
 
 from llmbench.evaluators._ladder import climb, context_ladder
 from llmbench.evaluators._sizing import CALIBRATION_PROBE, build_filler, chars_per_token
-from llmbench.evaluators.base import Breakdown, EvalContext, Evaluator, Verdict, View
+from llmbench.evaluators.base import (Breakdown, EvalContext, Evaluator, Verdict, View,
+                                      _successes)
 from llmbench.models import Metric, Sample
 from llmbench.registry import register
 
@@ -230,7 +231,8 @@ class ReassemblyEvaluator(Evaluator):
             if values:
                 metrics.append(Metric(evaluator=self.name, name=name,
                                       value=round(sum(values) / len(values), 4),
-                                      unit=unit, n=len(values)))
+                                      unit=unit, n=len(values),
+                                      successes=_successes(values)))
         return metrics
 
 

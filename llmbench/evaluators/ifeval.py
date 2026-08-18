@@ -129,5 +129,6 @@ class IFEvalEvaluator(Evaluator):
             source = by_name.get(computed)
             if source is not None:
                 metrics.append(Metric(evaluator=self.name, name=alias,
-                                      value=source.value, n=source.n))
+                                      value=source.value, n=source.n,
+                                      successes=source.successes))
         return metrics

@@ -208,7 +208,7 @@ class SpeedEvaluator(Evaluator):
         if source is None:
             return []
         return [Metric(evaluator=self.name, name=name, value=source.value,
-                       unit=source.unit, n=source.n)]
+                       unit=source.unit, n=source.n, successes=source.successes)]
 
     def _median(self, metric: str, trials: list[Sample], read, scenario: str,
                 unit: str = "tok/s") -> list[Metric]:
