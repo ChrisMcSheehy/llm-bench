@@ -327,10 +327,90 @@ def runs():
 
 
 @app.command()
+def compare(run_a: str = typer.Argument(..., help="Run id, as shown by `llmbench runs`"),
+            run_b: str = typer.Argument(..., help="The run to compare it against")):
+    """Say whether the difference between two runs is one the questions can show.
+
+    Not a comparison of two intervals. Both runs answered the same questions, so the
+    comparison is paired: only the items where they disagreed carry any information
+    about a difference, and treating the two as independent throws that away
+    (design C4).
+    """
+    store = Store()
+    known = {r["run_id"]: r for r in store.runs()}
+    for run_id in (run_a, run_b):
+        if run_id not in known:
+            console.print(f"[red]No run {run_id!r}.[/red] Try: llmbench runs")
+            store.close()
+            raise typer.Exit(code=1)
+
+    rows = store.paired_outcomes(run_a, run_b)
+    store.close()
+    if not rows:
+        console.print("These two runs share no test module, so there is nothing to pair.")
+        raise typer.Exit()
+
+    console.print(f"[bold]A[/bold] {known[run_a]['label']}")
+    console.print(f"[bold]B[/bold] {known[run_b]['label']}")
+    console.print()
+
+    for row in rows:
+        console.print(f"[bold]{row['evaluator']}[/bold]")
+        if not row["paired"]:
+            # Said out loud rather than left as an empty row, which would read exactly
+            # like agreement (LESSONS: assert-the-success-condition-not-the-absence-of-
+            # error).
+            console.print(f"  no shared questions "
+                          f"(A graded {row['a_total']}, B graded {row['b_total']})")
+            console.print()
+            continue
+
+        a_right = row["both_right"] + row["a_only"]
+        b_right = row["both_right"] + row["b_only"]
+        console.print(f"  A {a_right}/{row['paired']}    B {b_right}/{row['paired']}")
+        disagreements = row["a_only"] + row["b_only"]
+        # The intersection is always stated, but only spelled out when it is not
+        # everything: "6 of 6 and 6" is noise on the common case, while "3 of 10 and 13"
+        # is the fact that changes how the verdict should be read (design C6).
+        if row["paired"] == row["a_total"] == row["b_total"]:
+            scope = f"paired on all {row['paired']} graded"
+        else:
+            scope = (f"paired on {row['paired']} of {row['a_total']} and "
+                     f"{row['b_total']} graded")
+        console.print(f"  {scope}, {disagreements} "
+                      f"{_plural(disagreements, 'disagreement')} "
+                      f"(A won {row['a_only']}, B won {row['b_only']})")
+        # Never "equivalent", never "the same", never "no difference". The claim is
+        # about what these questions could show, not about what is true (design C5).
+        if row["distinguishable"]:
+            winner = "A" if row["a_only"] > row["b_only"] else "B"
+            console.print(f"  [bold]{winner} is ahead[/bold] (p={row['p']:.3f})")
+        else:
+            console.print(f"  indistinguishable (p={row['p']:.2f}) — "
+                          f"{row['paired']} {_plural(row['paired'], 'question')} "
+                          f"cannot separate these")
+        if row["excluded"]:
+            console.print(f"  [dim]{row['excluded']} shared "
+                          f"{_plural(row['excluded'], 'question')} left out: scored on a "
+                          f"gradient, which this test cannot read[/dim]")
+        console.print()
+
+
+@app.command()
 def serve(host: str = "127.0.0.1", port: int = 8900):
     """Launch the dashboard."""
     import uvicorn
     uvicorn.run("llmbench.dashboard.app:app", host=host, port=port, log_level="info")
+
+
+def _plural(count: int, noun: str) -> str:
+    """`noun` where there is one of it, `nouns` otherwise.
+
+    Here because "1 questions cannot separate these" is the kind of wrong that a test
+    asserting a substring will happily pass and a reader will notice immediately — which
+    is what reading the real output is for.
+    """
+    return noun if count == 1 else noun + "s"
 
 
 def _fmt(v, n=None, successes=None):

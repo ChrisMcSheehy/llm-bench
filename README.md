@@ -227,9 +227,38 @@ and any score graded on a gradient likewise show none. A run recorded before thi
 shows none either — the numerator cannot be recovered from a rounded rate, and one new run
 restores it.
 
-This is the cheap half of comparing two configurations. Saying whether the *difference*
-between two of them is real needs a paired test on the same questions, which is not built
-yet: two overlapping intervals are not a verdict, and this bench does not print one.
+### Is the difference between two runs real?
+
+An interval says how solid one figure is. It does not say whether two figures differ —
+**overlapping intervals are not a verdict**, and comparing two runs as though they were
+independent throws away the fact that both answered the same questions.
+
+```
+llmbench compare <run-a> <run-b>
+```
+
+```
+mcqa
+  A 5/6    B 4/6
+  paired on all 6 graded, 1 disagreement (A won 1, B won 0)
+  indistinguishable (p=1.00) — 6 questions cannot separate these
+```
+
+`0.833` against `0.667` looks like a sixteen-point gap. It is **one question**, and six
+questions cannot tell these two configurations apart. Only the items where the two runs
+disagreed carry any information about a difference: the ones they both got right, and the
+ones they both got wrong, are facts about the question rather than about the model. That
+is the whole test, and it is why the pairing matters — a configuration that won five items
+outright and lost none is *still* not distinguishable at the conventional threshold.
+
+"Indistinguishable" never means "the same". At six questions nothing is distinguishable
+from anything, so every verdict carries the number of paired items and the number of
+disagreements behind it. Questions scored on a gradient rather than right-or-wrong are
+left out and **said** to have been left out. The same comparison is at
+`http://127.0.0.1:8900/compare`.
+
+Still not built: intervals on `pass@1`, on the speed figures and on any gradient score,
+which need a bootstrap rather than this arithmetic.
 
 The memory figure is labelled **estimate** wherever it appears. It is computed from the
 model file's header and has never been checked against what a server really allocates.
@@ -672,7 +701,7 @@ memory.py     KV-cache cost: shape + cache settings -> bytes, or unknown
 stats.py      Wilson intervals on proportions: successes + n -> a range, or unknown
 hostinfo.py   machine facts: stdlib, plus the binary's device list
 cli.py        detect | memory | host | run | servers | launch | stop |
-              serve | runs | evaluators
+              serve | runs | compare | evaluators
 ```
 
 "Microservice-style" here means **in-process plugins with a clean, uniform

@@ -87,6 +87,29 @@ def metrics(run_id: str):
     s = store(); out = s.metrics_for(run_id); s.close(); return out
 
 
+@app.get("/api/compare/{run_a}/{run_b}")
+def compare(run_a: str, run_b: str):
+    """Whether the difference between two runs is one the questions can show.
+
+    Takes two run identifiers that already exist in the store and nothing else -- no
+    metric name, no threshold, no query. This is L1 and B6 restated for a third verb:
+    the browser names rows the user already has, and chooses nothing about how they are
+    read.
+
+    A run this store does not hold is refused rather than compared with nothing, because
+    an empty comparison reads exactly like agreement.
+    """
+    s = store()
+    known = {r["run_id"] for r in s.runs()}
+    missing = [r for r in (run_a, run_b) if r not in known]
+    if missing:
+        s.close()
+        raise HTTPException(status_code=404, detail=f"no such run: {', '.join(missing)}")
+    out = s.paired_outcomes(run_a, run_b)
+    s.close()
+    return out
+
+
 @app.get("/api/run/{run_id}/views")
 def views(run_id: str):
     """Every chart every test module declared, with its data (design E3).
@@ -401,6 +424,11 @@ def configs_page():
 @app.get("/arena")
 def arena():
     return FileResponse(_STATIC / "arena.html")
+
+
+@app.get("/compare")
+def compare_page():
+    return FileResponse(_STATIC / "compare.html")
 
 
 @app.get("/gallery")
