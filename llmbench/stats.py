@@ -58,3 +58,36 @@ def wilson(successes: int, n: int, z: float = Z_95) -> Optional[tuple[float, flo
     low = 0.0 if successes == 0 else max(0.0, low)
     high = 1.0 if successes == n else min(1.0, high)
     return (low, high)
+
+
+def mcnemar_exact(b: int, c: int) -> float:
+    """Two-sided exact McNemar test on `b` and `c` discordant outcomes.
+
+    `b` is the number of items the first configuration got right and the second got
+    wrong; `c` is the reverse. Returns the probability of seeing a split at least this
+    lopsided if the two were equally good.
+
+    **Only the discordant items are counted, and that is the whole point.** Items both
+    configurations answered correctly, and items both got wrong, say nothing about which
+    is better — they are facts about the question. All the information about a difference
+    lives where the two disagreed, and comparing two independent intervals instead throws
+    that pairing away (design C4).
+
+    The exact binomial form rather than the chi-square approximation, because the
+    approximation needs the discordant count to be large and this project's question sets
+    produce a handful. Under the null hypothesis the split is a fair coin, so this is the
+    two-tailed binomial probability of `min(b, c)` or fewer heads in `b + c` tosses.
+
+    `b == c == 0` returns 1.0: two runs that never disagreed give no evidence of a
+    difference. That is emphatically not evidence that they are the same, which is why
+    every caller prints the counts beside the verdict (design C5).
+    """
+    if b < 0 or c < 0:
+        raise ValueError(f"discordant counts cannot be negative: b={b} c={c}")
+    n = b + c
+    if n == 0:
+        return 1.0
+    tail = sum(math.comb(n, i) for i in range(min(b, c) + 1)) / (2 ** n)
+    # Doubling a one-tailed probability overshoots when the split is near even, and 1.06
+    # is not a probability. Capped rather than left to print.
+    return min(1.0, 2 * tail)

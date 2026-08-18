@@ -66,3 +66,57 @@ def test_it_refuses_a_numerator_larger_than_the_denominator():
     would hide it (lesson: assert-the-success-condition-not-the-absence-of-error)."""
     with pytest.raises(ValueError):
         wilson(7, 6)
+
+
+# ---- the paired comparison (design C4) ------------------------------------
+#
+# The interval above says how solid one figure is. These say whether the difference
+# between two of them is one the questions can actually show.
+
+from llmbench.stats import mcnemar_exact
+
+
+@pytest.mark.parametrize("b,c,p", [
+    (1, 0, 1.0000),
+    (2, 0, 0.5000),
+    (3, 0, 0.2500),
+    (5, 0, 0.0625),
+    (6, 1, 0.1250),
+    (10, 2, 0.0386),
+    (12, 3, 0.0352),
+    (20, 5, 0.0041),
+])
+def test_mcnemar_reproduces_the_measured_table(b, c, p):
+    """Measured values from DESIGN-statistical-confidence.md (C4), not values this
+    code produced."""
+    assert mcnemar_exact(b, c) == pytest.approx(p, abs=0.0001)
+
+
+def test_winning_five_and_losing_none_is_still_not_significant():
+    """The finding this phase exists to surface. A configuration that won five items
+    outright and lost none cannot be separated from noise at the conventional
+    threshold, and no other view of this data can say so."""
+    assert mcnemar_exact(5, 0) > 0.05
+
+
+def test_no_disagreement_is_no_evidence_of_a_difference():
+    """Comparing a run with itself. Not a division by zero, and not significance."""
+    assert mcnemar_exact(0, 0) == 1.0
+
+
+def test_which_run_is_named_first_does_not_change_the_answer():
+    for b, c in [(0, 0), (3, 1), (10, 2), (20, 5)]:
+        assert mcnemar_exact(b, c) == pytest.approx(mcnemar_exact(c, b))
+
+
+def test_a_probability_never_exceeds_one():
+    """The doubling that makes the test two-sided can overshoot at small counts."""
+    for b in range(0, 25):
+        for c in range(0, 25):
+            p = mcnemar_exact(b, c)
+            assert 0.0 <= p <= 1.0, f"b={b} c={c} gave {p}"
+
+
+def test_a_large_lopsided_split_is_significant():
+    """The other end: enough disagreement, going one way, is a real difference."""
+    assert mcnemar_exact(20, 5) < 0.01

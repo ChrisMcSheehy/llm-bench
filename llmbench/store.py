@@ -16,6 +16,7 @@ from typing import Any, Optional
 from llmbench.models import (
     HostFingerprint, Metric, ModelFingerprint, RunResult, Sample,
 )
+from llmbench.stats import mcnemar_exact
 
 
 def default_db_path() -> Path:
@@ -453,6 +454,85 @@ class Store:
         for row in rows:
             row["graded_samples"] = graded.get(row["fp_hash"], 0)
         return rows
+
+    def paired_outcomes(self, run_a: str, run_b: str) -> list[dict]:
+        """Per evaluator, how two runs did on the questions they both answered.
+
+        Pairs on `(evaluator, case_id)`, which is stable across runs: every evaluator
+        derives its case_id from the question's own identity — the item id, the problem
+        id and sample index, the context length and depth, the scenario name — and none
+        of them from a clock or a random value (checked across all fourteen modules,
+        2026-08-18).
+
+        Every count is returned rather than merely used. `paired` is how many questions
+        both runs graded; `a_total` and `b_total` are how many each graded in all, so a
+        comparison of two hundred-item runs that rested on six shared questions says so;
+        `excluded` is how many shared questions could not be scored right-or-wrong. A
+        verdict over an unstated subset is the naked figure D7 forbids (design C6).
+
+        `p` is None when nothing was paired. That is not a probability of 1: no evidence
+        is a different state from evidence of no difference, and only the first justifies
+        printing nothing (design C5).
+        """
+        pairs = self._rows(
+            """SELECT a.evaluator, a.score AS sa, b.score AS sb
+               FROM sample a JOIN sample b
+                 ON b.run_id=? AND b.evaluator=a.evaluator AND b.case_id=a.case_id
+               WHERE a.run_id=?
+                 AND a.error IS NULL AND a.skipped IS NULL AND a.score IS NOT NULL
+                 AND b.error IS NULL AND b.skipped IS NULL AND b.score IS NOT NULL""",
+            (run_b, run_a))
+
+        graded = {}
+        for run_id, key in ((run_a, "a_total"), (run_b, "b_total")):
+            for row in self._rows(
+                    """SELECT evaluator, COUNT(*) AS n FROM sample
+                       WHERE run_id=? AND error IS NULL AND skipped IS NULL
+                         AND score IS NOT NULL
+                       GROUP BY evaluator""", (run_id,)):
+                graded.setdefault(row["evaluator"], {})[key] = row["n"]
+
+        out: dict[str, dict] = {}
+        for row in pairs:
+            bucket = out.setdefault(row["evaluator"], {
+                "evaluator": row["evaluator"], "both_right": 0, "both_wrong": 0,
+                "a_only": 0, "b_only": 0, "excluded": 0})
+            # Both sides must be right-or-wrong. This is the same test `_successes` makes
+            # in evaluators/base.py, duplicated rather than shared because store.py may
+            # not import from evaluators/ and the reverse would invert the layer
+            # (ARCHITECTURE.md). Three lines across a boundary is the cheaper wrong.
+            a, b = row["sa"], row["sb"]
+            if a not in (0, 0.0, 1, 1.0) or b not in (0, 0.0, 1, 1.0):
+                bucket["excluded"] += 1
+                continue
+            if a and b:
+                bucket["both_right"] += 1
+            elif not a and not b:
+                bucket["both_wrong"] += 1
+            elif a:
+                bucket["a_only"] += 1
+            else:
+                bucket["b_only"] += 1
+
+        # An evaluator present in either run but sharing nothing still gets a row, so a
+        # comparison that paired nothing says so instead of omitting the module and
+        # reading as though it had agreed.
+        for evaluator in graded:
+            out.setdefault(evaluator, {
+                "evaluator": evaluator, "both_right": 0, "both_wrong": 0,
+                "a_only": 0, "b_only": 0, "excluded": 0})
+
+        for evaluator, bucket in out.items():
+            bucket["paired"] = (bucket["both_right"] + bucket["both_wrong"]
+                                + bucket["a_only"] + bucket["b_only"])
+            bucket["a_total"] = graded.get(evaluator, {}).get("a_total", 0)
+            bucket["b_total"] = graded.get(evaluator, {}).get("b_total", 0)
+            bucket["p"] = (mcnemar_exact(bucket["a_only"], bucket["b_only"])
+                           if bucket["paired"] else None)
+            # 0.05 is named here rather than left to each caller, so the command line and
+            # the dashboard cannot disagree about the same two runs.
+            bucket["distinguishable"] = bucket["p"] is not None and bucket["p"] < 0.05
+        return sorted(out.values(), key=lambda r: r["evaluator"])
 
     def hosts(self) -> list[dict]:
         """Every machine seen, newest first."""
