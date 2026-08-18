@@ -23,6 +23,7 @@ Dependencies point downward. Nothing lower may import from anything higher.
 | `launcher.py` | Starts and stops model servers from saved profiles | Import anything else in this project |
 | `hostinfo.py` | Machine facts: standard library, plus the binary's device list | Import anything else in this project |
 | `memory.py` | KV-cache cost arithmetic: shape + cache settings → bytes, or unknown | Import anything else in this project except `gguf.py` |
+| `stats.py` | Interval arithmetic on counts: successes + n → a range, or unknown | Import anything else in this project |
 | `gguf.py` | Reads a model file's header | Import anything else in this project |
 | `models.py` | Shared data types and identity hashing | Import anything else in this project |
 

@@ -637,6 +637,7 @@ dashboard/    FastAPI JSON API + single-file Plotly frontend
 launcher.py   starts and stops model servers from saved profiles
 gguf.py       reads a model file's header (layer count, head dimensions)
 memory.py     KV-cache cost: shape + cache settings -> bytes, or unknown
+stats.py      Wilson intervals on proportions: successes + n -> a range, or unknown
 hostinfo.py   machine facts: stdlib, plus the binary's device list
 cli.py        detect | memory | host | run | servers | launch | stop |
               serve | runs | evaluators
