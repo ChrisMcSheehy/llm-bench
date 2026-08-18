@@ -359,17 +359,41 @@ class Store:
         Only metrics in QUALITY_METRICS appear. A metric nobody has classified is left
         out rather than pooled, because pooling the wrong thing hides two machines
         inside one number (design D1).
+
+        A proportion is pooled by summing successes and trials, never by averaging the
+        per-run rates. Averaging weights a ten-item run as heavily as a hundred-item one:
+        runs of 80/100 and 4/10 pool to 84/110 = 0.764, where the average of the rates is
+        0.60 (design C3). A mean of means is also a quantity with no sample size, which
+        is the other reason no interval could be put on the figure this used to produce.
+
+        The average is kept only where a group is not wholly numbered — runs stored
+        before `successes` existed carry NULL, and summing across a NULL would drop that
+        run from the denominator without saying so, which is worse than the average it
+        would replace.
         """
         rows = self._rows(
             """SELECT r.fp_hash, f.label, m.evaluator, m.name,
-                      AVG(m.value) AS value, COUNT(*) AS runs,
-                      CASE WHEN COUNT(m.n)=COUNT(*) THEN SUM(m.n) END AS items
+                      AVG(m.value) AS rate_mean, COUNT(*) AS runs,
+                      CASE WHEN COUNT(m.n)=COUNT(*) THEN SUM(m.n) END AS items,
+                      CASE WHEN COUNT(m.successes)=COUNT(*)
+                           THEN SUM(m.successes) END AS successes
                FROM metric m JOIN run r ON r.run_id=m.run_id
                JOIN fingerprint f ON f.hash=r.fp_hash
                WHERE json_extract(m.dims_json,'$')='{}'
                GROUP BY r.fp_hash, m.evaluator, m.name
                ORDER BY f.label, m.evaluator, m.name""")
-        return [r for r in rows if r["name"] in QUALITY_METRICS]
+        out = []
+        for row in rows:
+            if row["name"] not in QUALITY_METRICS:
+                continue
+            # COUNT(col) skips NULLs, so `successes` is non-NULL here only when every run
+            # in the group carried one — which is exactly when summing is honest.
+            row["value"] = (row["successes"] / row["items"]
+                            if row["successes"] is not None and row["items"]
+                            else row["rate_mean"])
+            del row["rate_mean"]
+            out.append(row)
+        return out
 
     def pooled_speed(self) -> list[dict]:
         """Everything else, grouped by configuration **and machine**.

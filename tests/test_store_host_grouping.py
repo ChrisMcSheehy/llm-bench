@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 from llmbench.models import HostFingerprint, Metric, ModelFingerprint, RunResult
 from llmbench.store import Store
 
@@ -147,3 +149,41 @@ def test_the_machine_is_read_once_per_run_and_not_once_per_sample(tmp_path, monk
     assert len(calls) == len(results) == 1, (
         f"devices read {len(calls)} times for {len(results)} run(s) "
         f"and {samples} samples")
+
+
+def test_pooling_weights_a_run_by_its_size(tmp_path):
+    """AVG over per-run rates weights ten items as heavily as a hundred.
+
+    The two runs below are 80/100 and 4/10. The pooled rate is 84/110 = 0.764.
+    Averaging the rates gives 0.60, which is a mean of means and has no sample size -
+    which is also why no interval could be put on it (design C3).
+    """
+    store = Store(str(tmp_path / "p.db"))
+    for run_id, value, n, successes in [("big", 0.80, 100, 80), ("small", 0.40, 10, 4)]:
+        store.start_run(RunResult(run_id=run_id, fingerprint=_fp(), suite="t",
+                                  started_at=datetime.now(timezone.utc)))
+        store.add_metrics(run_id, [Metric(evaluator="mcqa", name="accuracy",
+                                          value=value, n=n, successes=successes)])
+    row = [r for r in store.pooled_quality() if r["name"] == "accuracy"][0]
+    store.close()
+
+    assert row["value"] == pytest.approx(0.7636, abs=0.001)
+    assert row["items"] == 110
+    assert row["successes"] == 84
+
+
+def test_a_run_without_a_numerator_falls_back_to_the_old_average(tmp_path):
+    """Runs stored before `successes` existed carry NULL. Summing across a NULL would
+    drop that run from the denominator while still reporting a confident-looking rate,
+    so a group that is not wholly numbered keeps averaging and reports no numerator."""
+    store = Store(str(tmp_path / "p.db"))
+    for run_id, value, n, successes in [("a", 0.80, 100, 80), ("b", 0.40, 10, None)]:
+        store.start_run(RunResult(run_id=run_id, fingerprint=_fp(), suite="t",
+                                  started_at=datetime.now(timezone.utc)))
+        store.add_metrics(run_id, [Metric(evaluator="mcqa", name="accuracy",
+                                          value=value, n=n, successes=successes)])
+    row = [r for r in store.pooled_quality() if r["name"] == "accuracy"][0]
+    store.close()
+
+    assert row["value"] == pytest.approx(0.60, abs=0.001)
+    assert row["successes"] is None
