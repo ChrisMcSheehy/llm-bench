@@ -276,6 +276,16 @@ class Metric(BaseModel):
     # None means the aggregator did not say, and is displayed as a dash - never as a
     # zero, because an unstated count is not a count of nothing.
     n: Optional[int] = None
+    # The numerator, when this figure is a proportion of counted successes - and None
+    # when it is not, which is the case for a continuous mean, a raw count and a
+    # throughput. Set by the same expression that set `value` and `n`, for the reason
+    # D7a gave for `n` itself: a numerator derived later in SQL re-implements the
+    # aggregator's filter, and the two then disagree with nobody noticing.
+    #
+    # This is what makes a confidence interval possible. A rate and a count cannot
+    # produce one on their own once the rate has been rounded, and averaging rates
+    # across runs destroys the denominator entirely (design C1, C3).
+    successes: Optional[int] = None
     dims: dict[str, Any] = Field(default_factory=dict)
 
 

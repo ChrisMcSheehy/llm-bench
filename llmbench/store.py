@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS sample (
 CREATE TABLE IF NOT EXISTS metric (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   run_id     TEXT REFERENCES run(run_id),
-  evaluator  TEXT, name TEXT, value REAL, unit TEXT, dims_json TEXT
+  evaluator  TEXT, name TEXT, value REAL, unit TEXT, dims_json TEXT,
+  successes  INTEGER
 );
 CREATE TABLE IF NOT EXISTS hvote (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,6 +169,12 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         # How many graded items this figure rests on. NULL means the aggregator did not
         # say, which is displayed as a dash and never as zero (design D7a).
         "n": "INTEGER",
+        # The numerator behind a proportion (design C1). NULL means this figure is not a
+        # proportion, or predates this column - both display as a dash and neither as a
+        # zero. Deliberately not backfilled: the numerator is unrecoverable from a
+        # rounded rate, and deriving it from the sample table would re-implement each
+        # aggregator's filter, which is the drift D7a exists to prevent.
+        "successes": "INTEGER",
     },
 }
 
@@ -278,9 +285,11 @@ class Store:
 
     def add_metrics(self, run_id: str, metrics: list[Metric]) -> None:
         self.conn.executemany(
-            """INSERT INTO metric (run_id, evaluator, name, value, unit, n, dims_json)
-               VALUES (?,?,?,?,?,?,?)""",
-            [(run_id, m.evaluator, m.name, m.value, m.unit, m.n, json.dumps(m.dims))
+            """INSERT INTO metric
+                 (run_id, evaluator, name, value, unit, n, successes, dims_json)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            [(run_id, m.evaluator, m.name, m.value, m.unit, m.n, m.successes,
+              json.dumps(m.dims))
              for m in metrics],
         )
         self.conn.commit()
@@ -308,7 +317,7 @@ class Store:
                ORDER BY r.started_at DESC""")
 
     def metrics_for(self, run_id: str) -> list[dict]:
-        return self._rows("SELECT evaluator, name, value, unit, n, dims_json "
+        return self._rows("SELECT evaluator, name, value, unit, n, successes, dims_json "
                           "FROM metric WHERE run_id=?", (run_id,))
 
     def leaderboard(self) -> list[dict]:
