@@ -541,6 +541,39 @@ as a fact about the deployment while actually being a fact about a string.
 
 ---
 
+## [2026-08-18] a-test-suite-that-never-parses-the-page-cannot-see-it-is-broken
+
+- **Trigger:** Phase C-1 added an interval to the dashboard's headline tiles and the page
+  rendered nothing. The cause was not the new code: commit `b56488f` (2026-08-15) had put
+  an HTML comment containing a backticked word inside the template literal that builds the
+  run detail page. A backtick closes a template literal, so the entire inline script failed
+  to parse and the page had been an empty shell for three days, across two further commits
+  that both edited that same file. All 644 tests passed throughout, and `test_views.py`,
+  `test_dashboard_counts.py` and `test_dashboard_skipped.py` all passed while the page they
+  describe rendered nothing — because every one of them tests the JSON the API serves and
+  none of them parses or runs the page.
+- **Lesson:** an inline `<script>` inside a served HTML file is code with no compiler, no
+  import, and no test touching it, so it can be *syntactically dead* while every test about
+  its data passes. Testing the endpoint a page calls is not testing the page. Any project
+  shipping hand-written inline JavaScript needs one check that the script parses, or the
+  first person to notice will be a user. A comment is not inert when it sits inside a
+  string being built — the parser sees it, and prose punctuation (backticks, `${`) is
+  syntax there.
+- **Enforcement:** `tests/test_dashboard_pages_parse.py`, over every file in
+  `dashboard/static/`. Two checks: no HTML comment may contain a backtick (needs nothing
+  installed, catches exactly what shipped), and `node --check` on every inline script where
+  node exists (catches the rest). Both confirmed falsifiable by reintroducing the original
+  backtick and watching each fail. The narrow check is deliberately not skippable, because
+  a guard that only runs where a toolchain happens to be present is the guard that is
+  absent in CI.
+- **Scope:** global. Any project with hand-written inline JavaScript in a served page.
+
+Related: [[observe-the-real-thing-rather-than-assert-something-unfalsifiable]] and
+[[a-check-that-stops-running-looks-nothing-like-a-check-that-fails]] — the same family:
+here the check never existed, and its absence looked exactly like passing.
+
+---
+
 ## moving-shared-files-needs-a-grep-not-a-memory
 
 **2026-07-26 — cost: one red test run, two mid-execution plan amendments.**

@@ -160,7 +160,9 @@ async function loadRun(id,r){
       <!-- Two tiles, not one. Reading the prompt and writing the answer have different
            bottlenecks; the single tile that used to sit here was output tokens over total
            wall time, which blended them and then moved with the prompt size it never
-           showed. Both read the `speed` evaluator; a run without it shows a dash. -->
+           showed. Both read the "speed" evaluator; a run without it shows a dash.
+           Quoted, not backticked: this comment sits inside a template literal, and a
+           backtick here closes it and kills the whole script. -->
       ${kpi("prefill",val("speed.prefill_tps")?.toFixed(0)??"—","","tok/s",
             cnt("speed.prefill_tps"))}
       ${kpi("decode",val("speed.decode_tps")?.toFixed(1)??"—","","tok/s",
