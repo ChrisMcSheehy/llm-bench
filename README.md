@@ -204,6 +204,33 @@ hundred — so no figure is displayed without the number of graded items behind 
 dashboard tiles, the chart labels, the heatmap tooltips and the `llmbench runs` table all
 carry it, and a figure whose count was never recorded shows a dash rather than a zero.
 
+A figure that is a rate of successes also carries the **range that many items actually
+supports** — a 95% Wilson interval:
+
+```
+needle.recall     needle.answered     coding.pass@1
+0.833             1.000               0.500
+[0.44, 0.97] n=6  [0.61, 1.00] n=6    n=164
+```
+
+Read the middle column: the model answered every one of six questions, and the honest
+reading of that is *somewhere above 61%*, not *certainty*. The textbook interval taught in
+most statistics courses reports `[1.00, 1.00]` there, and on five of six it reports an
+upper bound of 1.132, which is not a probability. Small question sets with perfect scores
+are this bench's normal operating condition, which is why the estimator that survives them
+is the one used.
+
+Only a rate of counted successes gets one. `pass@1` above shows none, because it is a mean
+over problems of an unbiased estimator rather than a count of successes out of its `n`, and
+a range drawn around it would describe the wrong denominator. Speeds, counts, perplexity
+and any score graded on a gradient likewise show none. A run recorded before this existed
+shows none either — the numerator cannot be recovered from a rounded rate, and one new run
+restores it.
+
+This is the cheap half of comparing two configurations. Saying whether the *difference*
+between two of them is real needs a paired test on the same questions, which is not built
+yet: two overlapping intervals are not a verdict, and this bench does not print one.
+
 The memory figure is labelled **estimate** wherever it appears. It is computed from the
 model file's header and has never been checked against what a server really allocates.
 
@@ -228,6 +255,11 @@ cannot be inflated and never goes stale.
 Quality figures there are pooled across machines, because the same model answers the same
 questions equally well anywhere. Speed figures are never pooled across machines and are
 listed per machine instead.
+
+Pooling a rate adds up the successes and the items, rather than averaging each run's rate.
+The two differ whenever the runs are different sizes: a run of 80/100 and a run of 4/10
+pool to 84/110 = 0.764, where averaging the two rates gives 0.60 and weights ten questions
+as heavily as a hundred.
 
 ## Launching servers
 

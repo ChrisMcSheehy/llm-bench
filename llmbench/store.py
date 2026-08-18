@@ -325,7 +325,7 @@ class Store:
             """SELECT r.run_id, r.started_at, f.label, f.engine,
                       f.kv_cache_k, f.kv_cache_v, f.spec_type,
                       r.host_hash, h.label AS host_label,
-                      m.evaluator, m.name, m.value, m.n
+                      m.evaluator, m.name, m.value, m.n, m.successes
                FROM run r JOIN fingerprint f ON f.hash=r.fp_hash
                LEFT JOIN host h ON h.hash=r.host_hash
                JOIN metric m ON m.run_id=r.run_id
@@ -351,6 +351,9 @@ class Store:
             # having been available to it (design D7b).
             b[f"{row['evaluator']}.{row['name']}"] = row["value"]
             b[f"{row['evaluator']}.{row['name']}.n"] = row["n"]
+            # Third under the same predictable key, so a caller cannot show the figure
+            # without its interval having been available to it (design D7b, C8).
+            b[f"{row['evaluator']}.{row['name']}.successes"] = row["successes"]
         return list(board.values())
 
     def pooled_quality(self) -> list[dict]:

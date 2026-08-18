@@ -101,6 +101,16 @@ const PL={paper_bgcolor:"rgba(0,0,0,0)",plot_bgcolor:"rgba(0,0,0,0)",
   yaxis:{gridcolor:LINE,zerolinecolor:LINE}};
 const CFG={displayModeBar:false,responsive:true};
 const fmtN=n=>n>=1e6?(n/1e6).toFixed(n%1e6?1:0)+"M":n>=1e3?(n/1e3)+"k":""+n;
+// The same Wilson interval llmbench/stats.py computes. Duplicated rather than fetched
+// because the page must not call out, and kept identical so the dashboard and the
+// command line cannot disagree about the same run (design C2, C7).
+const Z95=1.959963984540054;
+function wilson(k,n){
+  if(!n) return null;
+  const p=k/n, d=1+Z95*Z95/n, c=p+Z95*Z95/(2*n),
+        s=Z95*Math.sqrt(p*(1-p)/n+Z95*Z95/(4*n*n));
+  return [k===0?0:Math.max(0,(c-s)/d), k===n?1:Math.min(1,(c+s)/d)];
+}
 const fmtBytes=b=>b>=1024**3?(b/1024**3).toFixed(2)+" GiB":(b/1024**2).toFixed(0)+" MiB";
 const j=async u=>(await fetch(u)).json();
 
@@ -130,6 +140,9 @@ async function loadRun(id,r){
   const m=Object.fromEntries(metrics.filter(x=>x.dims_json==="{}")
         .map(x=>[`${x.evaluator}.${x.name}`,x]));
   const val=k=>m[k]?.value, cnt=k=>m[k]?m[k].n:undefined;
+  // A figure that is not a proportion carries no numerator and so gets no interval.
+  const ci=k=>{const row=m[k];
+    return row&&row.successes!=null&&row.n?wilson(row.successes,row.n):null;};
   const errors=totalOf(metrics,"error_count");
   const kv=r.kv_cache_k===r.kv_cache_v?r.kv_cache_k:`${r.kv_cache_k}/${r.kv_cache_v}`;
   const spec=(r.spec_type&&r.spec_type!=="none")?r.spec_type:null;
@@ -148,15 +161,17 @@ async function loadRun(id,r){
       ${r.build_commit?chip("commit",r.build_commit.slice(0,7)):""}
     </div>
     <div class="kpis">
-      ${kpi("needle recall",pct(val("needle.score_mean")),"sig","",cnt("needle.score_mean"))}
+      ${kpi("needle recall",pct(val("needle.score_mean")),"sig","",
+            cnt("needle.score_mean"),ci("needle.score_mean"))}
       <!-- The denominator behind the figure to its left: of the questions the model was
            asked, how many it answered at all. Two configurations at the same recall are
            different results if one of them declined a fifth of the questions. -->
-      ${kpi("answered",pct(val("needle.answer_rate")),"","",cnt("needle.answer_rate"))}
+      ${kpi("answered",pct(val("needle.answer_rate")),"","",
+            cnt("needle.answer_rate"),ci("needle.answer_rate"))}
       ${kpi("effective ctx",val("needle.effective_ctx")?fmtN(val("needle.effective_ctx")):"—",
             "","",cnt("needle.effective_ctx"))}
       ${kpi("coding pass@1",pct(val("coding.pass@1")??val("coding.pass_rate")),"warn","",
-            cnt("coding.pass@1")??cnt("coding.pass_rate"))}
+            cnt("coding.pass@1")??cnt("coding.pass_rate"),ci("coding.pass_rate"))}
       <!-- Two tiles, not one. Reading the prompt and writing the answer have different
            bottlenecks; the single tile that used to sit here was output tokens over total
            wall time, which blended them and then moved with the prompt size it never
@@ -278,9 +293,11 @@ function drawCap(scores){
 }
 
 const chip=(k,v,c="")=>`<span class="chip ${c}">${k} <b>${v}</b></span>`;
-const kpi=(k,v,c="",u="",n)=>`<div class="kpi"><div class="k">${k}</div>
+const kpi=(k,v,c="",u="",n,ci)=>`<div class="kpi"><div class="k">${k}</div>
   <div class="v ${c}">${v}${u?`<span class="u">${u}</span>`:""}</div>
-  <div class="n">${n===undefined?"&nbsp;":n===null?"n —":"n = "+n}</div></div>`;
+  <div class="n">${n===undefined?"&nbsp;":
+    (ci?`[${ci[0].toFixed(2)}, ${ci[1].toFixed(2)}] · `:"")+
+    (n===null?"n —":"n = "+n)}</div></div>`;
 const pct=v=>v==null?"—":(v*100).toFixed(1)+"%";
 
 async function drawTrend(){

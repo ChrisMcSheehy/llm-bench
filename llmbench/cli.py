@@ -38,6 +38,7 @@ from llmbench.memory import (
 from llmbench.orchestrator import Orchestrator, current_host
 from llmbench.registry import available
 from llmbench.resources import data_path
+from llmbench.stats import wilson
 from llmbench.store import Store
 
 app = typer.Typer(add_completion=False, help="Local LLM quality test harness")
@@ -306,11 +307,20 @@ def runs():
         t.add_row(
             str(r.get("label", "")), str(r.get("engine", "")), str(r.get("kv", "")),
             str(r.get("host_label") or "unknown"),
-            _fmt(r.get("needle.score_mean"), r.get("needle.score_mean.n")),
-            _fmt(r.get("needle.answer_rate"), r.get("needle.answer_rate.n")),
-            _fmt(r.get("coding.pass@1"), r.get("coding.pass@1.n")),
-            _fmt(r.get("speed.prefill_tps"), r.get("speed.prefill_tps.n")),
-            _fmt(r.get("speed.decode_tps"), r.get("speed.decode_tps.n")),
+            _fmt(r.get("needle.score_mean"), r.get("needle.score_mean.n"),
+                 r.get("needle.score_mean.successes")),
+            _fmt(r.get("needle.answer_rate"), r.get("needle.answer_rate.n"),
+                 r.get("needle.answer_rate.successes")),
+            # pass@1 passes no numerator and shows no interval, deliberately: its value
+            # is a mean over problems of the unbiased estimator while its n counts
+            # attempts, so Wilson does not describe it (design C1). The two speed
+            # columns pass none for the simpler reason that a throughput is not a rate.
+            _fmt(r.get("coding.pass@1"), r.get("coding.pass@1.n"),
+                 r.get("coding.pass@1.successes")),
+            _fmt(r.get("speed.prefill_tps"), r.get("speed.prefill_tps.n"),
+                 r.get("speed.prefill_tps.successes")),
+            _fmt(r.get("speed.decode_tps"), r.get("speed.decode_tps.n"),
+                 r.get("speed.decode_tps.successes")),
         )
     console.print(t)
     store.close()
@@ -323,17 +333,31 @@ def serve(host: str = "127.0.0.1", port: int = 8900):
     uvicorn.run("llmbench.dashboard.app:app", host=host, port=port, log_level="info")
 
 
-def _fmt(v, n=None):
-    """A figure and the number of graded items behind it, never one without the other.
+def _fmt(v, n=None, successes=None):
+    """A figure, what qualifies it, and never one without the other.
 
     This table gets pasted into places where the reader cannot ask how many questions
     were behind an accuracy (design D7). An unstated count prints as a dash, because a
     count of zero would be a different and false claim.
+
+    A proportion also carries its 95% interval (design C8): 0.833 over six items is one
+    question away from 0.667, and the interval is what says so on the page rather than
+    leaving the reader to work it out. Everything else carries none — a range around a
+    throughput or a count would be arithmetic on the wrong kind of number, and printing
+    one would be worse than printing nothing.
+
+    The interval goes on a second line because this table already has nine columns, and
+    the bounds are separated by a comma rather than a dash so that every character is
+    ASCII — the console encoding on Windows is not guaranteed to carry anything else
+    (LESSONS: rich-substitutes-for-some-unencodable-characters-but-not-all).
     """
     if v is None:
         return "—"
     text = f"{v:.3f}" if isinstance(v, float) else str(v)
-    return f"{text}  [dim]n={n}[/dim]" if n is not None else f"{text}  [dim]n=—[/dim]"
+    count = f"n={n}" if n is not None else "n=—"
+    bounds = wilson(successes, n) if successes is not None and n else None
+    interval = f"[{bounds[0]:.2f}, {bounds[1]:.2f}] " if bounds else ""
+    return f"{text}\n[dim]{interval}{count}[/dim]"
 
 
 if __name__ == "__main__":

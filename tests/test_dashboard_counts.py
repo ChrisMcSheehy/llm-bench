@@ -123,3 +123,27 @@ def test_a_configuration_with_no_memory_figure_reports_none_not_zero(tmp_path):
     store.close()
 
     assert rows[0]["kv_cache_bytes"] is None
+
+
+def test_the_api_serves_the_numerator_the_interval_needs(tmp_path, monkeypatch):
+    """The dashboard draws its own interval, so it needs the numerator and not a
+    pre-computed range: the method stays at read time and reaches every stored run
+    (design C1, C2). metrics_for selects an explicit column list, so this is a real
+    risk of the figure arriving stripped of what qualifies it."""
+    monkeypatch.setenv("LLMBENCH_DB", str(tmp_path / "d.db"))
+    store = Store(str(tmp_path / "d.db"))
+    fp = ModelFingerprint(engine="llama.cpp", base_url="http://localhost:8080",
+                          model_id="Qwen3-8B", n_ctx=32768)
+    store.start_run(RunResult(run_id="r1", fingerprint=fp, suite="t",
+                              started_at=datetime.now(timezone.utc)))
+    store.add_metrics("r1", [
+        Metric(evaluator="mcqa", name="score_mean", value=0.8333, n=6, successes=5),
+        Metric(evaluator="speed", name="decode_tps", value=41.2, n=3),
+    ])
+    store.close()
+
+    from llmbench.dashboard.app import app
+    rows = {r["name"]: r for r in TestClient(app).get("/api/run/r1/metrics").json()}
+
+    assert rows["score_mean"]["successes"] == 5
+    assert rows["decode_tps"]["successes"] is None
